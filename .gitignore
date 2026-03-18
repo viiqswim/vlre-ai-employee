@@ -1,0 +1,17 @@
+node_modules/
+.env
+dist/
+.sisyphus/evidence/
+logs/
+data/
+*.local
+.DS_Store
+
+# bun init artifacts
+CLAUDE.md
+README.md
+index.ts
+.cursor/
+
+# Opencode AI Agent
+.sisyphus/

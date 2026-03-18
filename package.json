@@ -1,0 +1,15 @@
+{
+  "name": "vlre-employee-v2",
+  "version": "0.1.0",
+  "description": "Papi Chulo v2 — OpenClaw-based agent runtime for VL Real Estate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
