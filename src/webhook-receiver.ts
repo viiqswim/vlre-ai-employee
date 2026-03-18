@@ -17,7 +17,7 @@ export function startWebhookReceiver(
         return new Response(
           JSON.stringify({
             status: 'ok',
-            service: 'papi-chulo-v2',
+            service: 'papi-chulo',
             uptime: Math.floor(process.uptime()),
           }),
           {

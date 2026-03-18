@@ -9,7 +9,7 @@ import { processWebhookMessage } from '../skills/pipeline/index.ts';
 const BOT_NAME = process.env['BOT_NAME'] ?? 'Papi Chulo';
 
 async function main(): Promise<void> {
-  console.log(`\n🏠 ${BOT_NAME} v2 starting up...\n`);
+  console.log(`\n🏠 ${BOT_NAME} starting up...\n`);
 
   const hostfullyClient = createHostfullyClient();
   const kbReader = createKBReader('./knowledge-base.md');
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
 
   startWebhookReceiver((payload) => processWebhookMessage(payload, pipelineContext));
 
-  console.log(`\n✅ ${BOT_NAME} v2 is ready\n`);
+  console.log(`\n✅ ${BOT_NAME} is ready\n`);
 
   const shutdown = async (signal: string) => {
     console.log(`\n[${BOT_NAME}] ${signal} received — shutting down gracefully`);

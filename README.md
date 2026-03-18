@@ -1,8 +1,8 @@
-# Papi Chulo v2
+# Papi Chulo
 
-A digital employee for VL Real Estate built on the OpenClaw agent runtime. Papi Chulo v2 monitors Hostfully PMS for incoming guest messages, uses Claude AI to classify them and draft responses, then routes everything through a Slack approval workflow. The CS team sees a rich Slack message with guest name, property, dates, booking channel, and an AI-drafted reply — and can Approve, Reject, or Edit & Send. Nothing goes to the guest without human sign-off.
+A digital employee for VL Real Estate built on the OpenClaw agent runtime. Papi Chulo monitors Hostfully PMS for incoming guest messages, uses Claude AI to classify them and draft responses, then routes everything through a Slack approval workflow. The CS team sees a rich Slack message with guest name, property, dates, booking channel, and an AI-drafted reply — and can Approve, Reject, or Edit & Send. Nothing goes to the guest without human sign-off.
 
-Built on OpenClaw for skill-based extensibility and persistent memory. This is the **v2 rewrite** of the original service, with a modular skill architecture and a full audit trail.
+Built on OpenClaw for skill-based extensibility and persistent memory. Built with a modular skill architecture and a full audit trail.
 
 ---
 
@@ -72,7 +72,7 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |
 | `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |
-| `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `3001` (v2 uses 3001 to avoid conflict with v1's 3000) |
+| `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `3001` |
 | `WEBHOOK_PUBLIC_URL` | Auto | Set automatically by `start.sh` from Tailscale Funnel — don't set this manually |
 | `OPENCLAW_HOOKS_TOKEN` | Yes | 64-char hex token generated during OpenClaw onboarding |
 
@@ -229,7 +229,7 @@ truncate -s 0 data/processed-messages.txt
 
 This is Phase 1 of a larger digital employee. The goal is a system that handles the entire guest communication lifecycle, with the CS team in the loop only where it matters.
 
-**v2 (current)**
+**Current**
 - Skill-based architecture via OpenClaw
 - Monitor guest messages via Hostfully webhook
 - AI classification and response drafting

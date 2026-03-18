@@ -1,5 +1,5 @@
 #!/bin/bash
-# Papi Chulo v2 — VL Real Estate Digital Employee
+# Papi Chulo — VL Real Estate Digital Employee
 # Start script: launches the webhook server + Slack bot
 
 set -e
@@ -11,7 +11,7 @@ BOT_NAME="${BOT_NAME:-Papi Chulo}"
 WEBHOOK_PORT="${WEBHOOK_PORT:-$(grep '^WEBHOOK_PORT=' .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'")}"
 WEBHOOK_PORT="${WEBHOOK_PORT:-3001}"
 
-echo "Starting $BOT_NAME v2..."
+echo "Starting $BOT_NAME..."
 
 # Check .env exists
 if [ ! -f ".env" ]; then
@@ -69,6 +69,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start Papi Chulo v2
+# Start Papi Chulo
 echo "Starting $BOT_NAME main process..."
 bun run src/index.ts

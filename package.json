@@ -1,7 +1,7 @@
 {
-  "name": "vlre-employee-v2",
+  "name": "vlre-employee",
   "version": "0.1.0",
-  "description": "Papi Chulo v2 — OpenClaw-based agent runtime for VL Real Estate",
+  "description": "Papi Chulo — VL Real Estate Digital Employee (OpenClaw agent runtime)",
   "private": true,
   "type": "module",
   "scripts": {
