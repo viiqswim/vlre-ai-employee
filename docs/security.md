@@ -1,6 +1,6 @@
 # Security Hardening
 
-OpenClaw gateway security configuration for Papi Chulo v2.
+OpenClaw gateway security configuration for Papi Chulo.
 
 ## Applied Hardening
 

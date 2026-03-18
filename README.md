@@ -36,7 +36,7 @@ The OpenClaw agent runs alongside the service, maintaining persistent memory in 
 - **Node.js** 22.21+ — required for the OpenClaw daemon (set in `.tool-versions`)
 - **Tailscale** account with Funnel enabled — needed for a stable public webhook URL
 - **Hostfully PMS** account with an API key
-- **Slack workspace** with a bot app configured — see `docs/slack-app-setup.md`
+- **Slack workspace** with a bot app configured
 - **Claude access** — either a Claude Max subscription (free via the `claude-max-api` proxy) or an Anthropic API key (pay-per-token)
 
 ---
@@ -221,6 +221,18 @@ This is normal if the dedup store was cleared. The store persists across restart
 
 ```bash
 truncate -s 0 data/processed-messages.txt
+```
+
+---
+
+## Development
+
+This project uses **OpenCode** for AI-assisted development. `AGENTS.md` in the project root is the primary instruction file — it's read automatically by OpenCode and compatible tools (Codex, Cursor, Copilot, Windsurf).
+
+```bash
+bun test                    # Run tests
+bun run typecheck           # TypeScript type checking
+bun run scripts/simulate-webhook.ts  # Test pipeline with real messages
 ```
 
 ---
