@@ -2,29 +2,12 @@ import type { HostfullyWebhookPayload } from '../skills/hostfully-client/index.t
 import { createDeduplicator } from '../skills/dedup/index.ts';
 
 const PORT = parseInt(process.env['WEBHOOK_PORT'] ?? '3001', 10);
-const OPENCLAW_URL = 'http://127.0.0.1:18789/hooks/hostfully';
-const OPENCLAW_TOKEN = process.env['OPENCLAW_HOOKS_TOKEN'] ?? '';
 
 const dedup = createDeduplicator('data/processed-messages.txt');
 
-async function forwardToOpenClaw(payload: HostfullyWebhookPayload): Promise<void> {
-  const resp = await fetch(OPENCLAW_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENCLAW_TOKEN}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!resp.ok) {
-    throw new Error(`OpenClaw returned ${resp.status} ${resp.statusText}`);
-  }
-
-  console.log(`[WEBHOOK] Forwarded to OpenClaw: ${resp.status}`);
-}
-
-export function startWebhookReceiver(): void {
+export function startWebhookReceiver(
+  onMessage: (payload: HostfullyWebhookPayload) => Promise<void>
+): void {
   Bun.serve({
     port: PORT,
     fetch: async (request) => {
@@ -96,8 +79,8 @@ export function startWebhookReceiver(): void {
         });
 
         // Fire-and-forget: don't await so Hostfully gets the 200 without delay
-        forwardToOpenClaw(payload).catch((err) =>
-          console.error('[WEBHOOK] Forward failed:', err)
+        onMessage(payload).catch((err) =>
+          console.error('[WEBHOOK] Pipeline failed:', err)
         );
 
         return response;
