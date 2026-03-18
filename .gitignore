@@ -10,7 +10,7 @@ data/
 # bun init artifacts
 CLAUDE.md
 README.md
-index.ts
+/index.ts
 .cursor/
 
 # Opencode AI Agent

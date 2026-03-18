@@ -184,6 +184,13 @@ test('buildErrorBlocks returns array with error message', () => {
   }
 });
 
+type ModalView = {
+  type: string;
+  callback_id: string;
+  title?: { text: string };
+  blocks?: Array<{ type: string; element?: { initial_value?: string } }>;
+};
+
 test('buildEditModal returns modal view object', () => {
   const modal = buildEditModal({
     draftResponse: 'Test response',
@@ -192,7 +199,7 @@ test('buildEditModal returns modal view object', () => {
     threadUid: 'thread-456',
     leadUid: 'lead-789',
     messageUid: 'msg-123',
-  });
+  }) as ModalView;
   
   expect(modal).toBeDefined();
   expect(modal.type).toBe('modal');
@@ -210,7 +217,7 @@ test('buildEditModal includes initial_value with draftResponse', () => {
     threadUid: 'thread-456',
     leadUid: 'lead-789',
     messageUid: 'msg-123',
-  });
+  }) as ModalView;
   
   const inputBlock = modal.blocks?.find(b => b.type === 'input');
   expect(inputBlock).toBeDefined();
