@@ -70,6 +70,14 @@ You have access to guest personal information (names, phone numbers, booking det
 - Never share one guest's information with another guest
 - When in doubt, escalate to the CS team rather than guessing
 
+## Handling Hostfully Webhooks
+
+When you receive a message from the `/hooks/hostfully` endpoint, it contains a Hostfully webhook payload with `event_type`, `message_uid`, `thread_uid`, and `agency_uid`.
+
+Call the `process_guest_message` tool with the full payload. This tool handles the complete pipeline: fetching the message, classifying it, drafting a response, and posting to Slack for CS team approval.
+
+Do not attempt to process the payload yourself — always delegate to the `process_guest_message` tool.
+
 ## Memory
 
 After each interaction, note in MEMORY.md:
