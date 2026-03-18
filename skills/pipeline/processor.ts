@@ -3,6 +3,7 @@ import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { KnowledgeBaseReader } from '../kb-reader/reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import { buildApprovalBlocks, buildErrorBlocks } from '../slack-blocks/blocks.ts';
+import { withRetry } from './retry.js';
 
 export interface WebhookPayload {
   event_type: string;
@@ -136,62 +137,89 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   const model = process.env['CLAUDE_MODEL'] ?? 'claude-3-5-sonnet-20241022';
   const mode = process.env['CLAUDE_MODE'] ?? (apiKey ? 'api' : 'proxy');
+  const retryAttempts = parseInt(process.env['CLAUDE_RETRY_ATTEMPTS'] ?? '2', 10);
+  const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
   const userMessage = buildUserMessage(params);
 
-  let responseText: string;
+  let responseText = '';
+  let useApiMode = mode !== 'proxy';
 
   if (mode === 'proxy') {
     console.log(`[PIPELINE] Calling Claude via proxy: ${proxyUrl}`);
-    let response: Response;
     try {
-      response = await fetch(`${proxyUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1500,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: userMessage },
-          ],
-        }),
-      });
+      const response = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch(`${proxyUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model,
+              max_tokens: 1500,
+              messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: userMessage },
+              ],
+            }),
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }, { maxAttempts: retryAttempts });
+
+      if (!response.ok) {
+        throw new Error(`Claude proxy error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as {
+        choices: Array<{ message: { content: string } }>;
+      };
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('[PIPELINE] Claude proxy returned empty response');
+      responseText = content;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      throw new Error(`[PIPELINE] Claude proxy connection failed (${proxyUrl}): ${msg}. Is the proxy running?`);
+      const fallbackToApi = process.env['CLAUDE_FALLBACK_TO_API'] === 'true';
+      if (fallbackToApi && apiKey) {
+        useApiMode = true;
+      } else {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(`[PIPELINE] Claude proxy connection failed (${proxyUrl}): ${msg}. Is the proxy running?`);
+      }
     }
+  }
 
-    if (!response.ok) {
-      throw new Error(`Claude proxy error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json() as {
-      choices: Array<{ message: { content: string } }>;
-    };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('[PIPELINE] Claude proxy returned empty response');
-    responseText = content;
-  } else {
+  if (useApiMode) {
     if (!apiKey) throw new Error('[PIPELINE] ANTHROPIC_API_KEY not set');
     console.log(`[PIPELINE] Calling Claude via Anthropic API (model: ${model})`);
 
     let response: Response;
     try {
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1500,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userMessage }],
-        }),
-      });
+      response = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model,
+              max_tokens: 1500,
+              system: SYSTEM_PROMPT,
+              messages: [{ role: 'user', content: userMessage }],
+            }),
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }, { maxAttempts: retryAttempts });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       throw new Error(`[PIPELINE] Anthropic API connection failed: ${msg}`);
