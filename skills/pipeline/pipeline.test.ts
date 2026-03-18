@@ -1,10 +1,11 @@
-import { test, expect, mock, beforeEach, afterEach, spyOn } from 'bun:test';
+import { test, expect, mock, beforeEach, afterEach, spyOn, describe } from 'bun:test';
 import { processWebhookMessage } from './processor.ts';
 import type { PipelineContext, WebhookPayload } from './processor.ts';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { KnowledgeBaseReader } from '../kb-reader/reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import type { App } from '@slack/bolt';
+import { withRetry, isRetryableError } from './retry.js';
 
 function makePayload(overrides: Partial<WebhookPayload> = {}): WebhookPayload {
   return {
@@ -267,4 +268,171 @@ test('posts error to Slack when getMessage fails', async () => {
 
   const args = postCalls[0]?.[0] as { blocks: unknown[] };
   expect(Array.isArray(args?.blocks)).toBe(true);
+});
+
+describe('withRetry', () => {
+  test('retries on TypeError("fetch failed") — Bun network error', async () => {
+    let callCount = 0;
+    const fn = async () => {
+      callCount++;
+      if (callCount < 3) {
+        throw new TypeError('fetch failed');
+      }
+      return 'success';
+    };
+
+    const result = await withRetry(fn, { maxAttempts: 3, _sleep: () => Promise.resolve() });
+
+    expect(callCount).toBe(3);
+    expect(result).toBe('success');
+  });
+
+  test('does NOT retry non-transient errors', async () => {
+    let callCount = 0;
+    const fn = async () => {
+      callCount++;
+      throw new Error('invalid JSON response');
+    };
+
+    try {
+      await withRetry(fn, { maxAttempts: 3, _sleep: () => Promise.resolve() });
+      expect.unreachable();
+    } catch (error) {
+      expect(callCount).toBe(1);
+      expect(error instanceof Error).toBe(true);
+    }
+  });
+
+  test('exhausts maxAttempts then throws', async () => {
+    let callCount = 0;
+    const fn = async () => {
+      callCount++;
+      throw new TypeError('fetch failed');
+    };
+
+    try {
+      await withRetry(fn, { maxAttempts: 3, _sleep: () => Promise.resolve() });
+      expect.unreachable();
+    } catch (error) {
+      expect(callCount).toBe(3);
+      expect(error instanceof TypeError).toBe(true);
+    }
+  });
+
+  test('succeeds on 2nd attempt after 1st fails', async () => {
+    let callCount = 0;
+    const fn = async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new TypeError('fetch failed');
+      }
+      return 'success on 2nd';
+    };
+
+    const result = await withRetry(fn, { maxAttempts: 3, _sleep: () => Promise.resolve() });
+
+    expect(callCount).toBe(2);
+    expect(result).toBe('success on 2nd');
+  });
+
+  test('isRetryableError: TypeError("fetch failed") → true', () => {
+    expect(isRetryableError(new TypeError('fetch failed'))).toBe(true);
+  });
+
+  test('isRetryableError: AbortError (timeout) → true', () => {
+    const e = new Error('The operation was aborted');
+    e.name = 'AbortError';
+    expect(isRetryableError(e)).toBe(true);
+  });
+
+  test('isRetryableError: generic Error → false', () => {
+    expect(isRetryableError(new Error('some business error'))).toBe(false);
+  });
+});
+
+describe('proxy→API fallback', () => {
+  test('falls back to Anthropic API when proxy fails and CLAUDE_FALLBACK_TO_API=true', async () => {
+    global.fetch = mock(async (url: string | Request) => {
+      const urlStr = typeof url === 'string' ? url : url.url;
+
+      if (typeof urlStr === 'string' && urlStr.includes('api.anthropic.com')) {
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    classification: 'general_inquiry',
+                    confidence: 0.9,
+                    suggestedResponse: 'Hello!',
+                    reasoning: 'test',
+                  }),
+                },
+              ],
+            }),
+        } as Response;
+      }
+
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_FALLBACK_TO_API'] = 'true';
+    process.env['ANTHROPIC_API_KEY'] = 'test-key-123';
+
+    const context = makeContext();
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    const firstCallArg = postCalls[0]?.[0] as { text?: string; blocks?: unknown[] };
+    const hasManualReview = firstCallArg?.text?.includes('Manual Review Required') ?? false;
+    expect(hasManualReview).toBe(false);
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_FALLBACK_TO_API'];
+    delete process.env['ANTHROPIC_API_KEY'];
+  });
+
+  test('does NOT fall back when CLAUDE_FALLBACK_TO_API is unset', async () => {
+    global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    delete process.env['CLAUDE_FALLBACK_TO_API'];
+
+    const context = makeContext();
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    const text = (postCalls[0]?.[0] as { text: string }).text;
+    expect(text).toContain('Manual Review Required');
+
+    delete process.env['CLAUDE_MODE'];
+  });
+
+  test('posts Manual Review when both proxy and API fallback fail', async () => {
+    global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_FALLBACK_TO_API'] = 'true';
+    process.env['ANTHROPIC_API_KEY'] = 'test-key-123';
+
+    const context = makeContext();
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    const text = (postCalls[0]?.[0] as { text: string }).text;
+    expect(text).toContain('Manual Review Required');
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_FALLBACK_TO_API'];
+    delete process.env['ANTHROPIC_API_KEY'];
+  });
 });
