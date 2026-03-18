@@ -7,8 +7,9 @@
     "noUncheckedIndexedAccess": true,
     "types": ["bun-types"],
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "skills/**/*"],
   "exclude": ["node_modules", "dist"]
 }
