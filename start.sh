@@ -55,10 +55,33 @@ fi
 # Start claude-max-api proxy in background (if CLAUDE_MODE=proxy)
 if grep -q 'CLAUDE_MODE="proxy"' .env 2>/dev/null; then
   echo "Starting Claude Max API proxy..."
-  claude-max-api &>/tmp/riley-claude-proxy.log &
+  # claude-max-api is installed under nodejs 20.19.0 — must specify version explicitly
+  # because this project's .tool-versions uses nodejs 22.21.1 (required for OpenClaw)
+  ASDF_NODEJS_VERSION=20.19.0 claude-max-api &>/tmp/riley-claude-proxy.log &
   PROXY_PID=$!
-  sleep 3
   echo "Claude proxy PID: $PROXY_PID"
+
+  # Wait for proxy to be ready (up to 15s) using /dev/tcp bash built-in
+  # Do NOT use nc (not always available on macOS) or curl (no HTTP health endpoint)
+  PROXY_HOST="127.0.0.1"
+  PROXY_PORT="3456"
+  PROXY_TIMEOUT=15
+  PROXY_ELAPSED=0
+  echo "Waiting for Claude proxy on :${PROXY_PORT}..."
+  while [ $PROXY_ELAPSED -lt $PROXY_TIMEOUT ]; do
+    if timeout 1 bash -c "echo >/dev/tcp/${PROXY_HOST}/${PROXY_PORT}" 2>/dev/null; then
+      echo "Claude proxy ready on :${PROXY_PORT} (${PROXY_ELAPSED}s)"
+      break
+    fi
+    sleep 0.5
+    PROXY_ELAPSED=$((PROXY_ELAPSED + 1))
+  done
+
+  if [ $PROXY_ELAPSED -ge $PROXY_TIMEOUT ]; then
+    echo "ERROR: Claude proxy did not start within ${PROXY_TIMEOUT}s" >&2
+    echo "Check logs: cat /tmp/riley-claude-proxy.log" >&2
+    exit 1
+  fi
 fi
 
 # Cleanup on exit
