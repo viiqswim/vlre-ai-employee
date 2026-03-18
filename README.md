@@ -1,0 +1,255 @@
+# Papi Chulo v2
+
+A digital employee for VL Real Estate built on the OpenClaw agent runtime. Papi Chulo v2 monitors Hostfully PMS for incoming guest messages, uses Claude AI to classify them and draft responses, then routes everything through a Slack approval workflow. The CS team sees a rich Slack message with guest name, property, dates, booking channel, and an AI-drafted reply — and can Approve, Reject, or Edit & Send. Nothing goes to the guest without human sign-off.
+
+Built on OpenClaw for skill-based extensibility and persistent memory. This is the **v2 rewrite** of the original service, with a modular skill architecture and a full audit trail.
+
+---
+
+## How It Works
+
+```mermaid
+flowchart TD
+    A([Guest sends message]) --> B[Hostfully PMS]
+    B -->|NEW_INBOX_MESSAGE webhook| TF[Tailscale Funnel :443]
+    TF -->|forwards to :3001| WR[Webhook Receiver]
+    WR -->|validate + dedup| PP[Pipeline Processor]
+    PP -->|fetch message/lead/property| HF[Hostfully API]
+    PP -->|search| KB[knowledge-base.md]
+    PP -->|classify + draft| CL[Claude AI via proxy]
+    PP -->|post approval| SL[Slack via Bolt]
+    SL --> CS{CS Team}
+    CS -->|Approve/Edit| HF
+    CS -->|Reject| DONE([Discarded])
+    OC[OpenClaw Agent] -->|persistent memory| MEM[MEMORY.md]
+```
+
+When a guest sends a message, Hostfully fires a webhook to the local receiver via Tailscale Funnel. The pipeline fetches the full message thread, lead details, and property info from the Hostfully API, then searches the local knowledge base for relevant context. That package goes to Claude, which classifies the message type and drafts a response. The draft gets posted to Slack as a Block Kit message. A CS team member reviews it and either approves it (sends immediately), rejects it (discards), or edits it before sending. Hostfully handles the actual delivery to the guest.
+
+The OpenClaw agent runs alongside the service, maintaining persistent memory in `MEMORY.md` and providing the skill execution runtime.
+
+---
+
+## Prerequisites
+
+- **Bun** v1.3+ — [bun.sh](https://bun.sh)
+- **Node.js** 22.21+ — required for the OpenClaw daemon (set in `.tool-versions`)
+- **Tailscale** account with Funnel enabled — needed for a stable public webhook URL
+- **Hostfully PMS** account with an API key
+- **Slack workspace** with a bot app configured — see `docs/slack-app-setup.md`
+- **Claude access** — either a Claude Max subscription (free via the `claude-max-api` proxy) or an Anthropic API key (pay-per-token)
+
+---
+
+## Quick Start
+
+```bash
+cp .env.example .env
+# fill in credentials (see Configuration section)
+bun install
+openclaw gateway start  # if not already running as daemon
+./start.sh
+```
+
+`./start.sh` handles the full startup sequence: it starts Tailscale Funnel to expose the local webhook port, starts the Claude proxy if you're in `proxy` mode, and starts the service.
+
+---
+
+## Configuration
+
+All configuration lives in `.env`. Copy `.env.example` to get started.
+
+| Variable | Required | Description |
+|---|---|---|
+| `BOT_NAME` | No | Display name used in logs and Slack messages. Default: `Papi Chulo` |
+| `HOSTFULLY_API_KEY` | Yes | Found in Hostfully → Agency Settings → API |
+| `HOSTFULLY_AGENCY_UID` | Yes | Your agency UID from Hostfully |
+| `HOSTFULLY_API_URL` | Yes | Base URL. Default: `https://api.hostfully.com/api/v3.2` |
+| `CLAUDE_MODE` | Yes | `proxy` (Claude Max subscription, free) or `api` (Anthropic API key, pay-per-token) |
+| `CLAUDE_PROXY_URL` | If proxy | Claude proxy URL. Default: `http://127.0.0.1:3456` |
+| `CLAUDE_MODEL` | Yes | Claude model ID |
+| `ANTHROPIC_API_KEY` | If api mode | Anthropic API key |
+| `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |
+| `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
+| `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |
+| `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `3001` (v2 uses 3001 to avoid conflict with v1's 3000) |
+| `WEBHOOK_PUBLIC_URL` | Auto | Set automatically by `start.sh` from Tailscale Funnel — don't set this manually |
+| `OPENCLAW_HOOKS_TOKEN` | Yes | 64-char hex token generated during OpenClaw onboarding |
+
+---
+
+## OpenClaw Setup
+
+OpenClaw is the agent runtime that powers the skill system and persistent memory.
+
+**Install:**
+
+```bash
+npm install -g openclaw@2026.3.13
+```
+
+Requires Node.js 22.21+. The `.tool-versions` file in this repo pins the correct version — use `asdf` or `mise` to activate it.
+
+**Onboard (run once):**
+
+```bash
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --mode local \
+  --auth-choice synthetic-api-key \
+  --synthetic-api-key placeholder \
+  --gateway-port 18789 \
+  --gateway-bind loopback \
+  --install-daemon \
+  --daemon-runtime node \
+  --skip-skills
+```
+
+**Verify:**
+
+```bash
+openclaw gateway status
+```
+
+The gateway must be running before you start the service. If it's installed as a daemon, it starts automatically on login. Otherwise, run `openclaw gateway start` manually.
+
+---
+
+## Webhook Registration
+
+Hostfully needs to know where to send webhook events. This is a one-time setup.
+
+```bash
+WEBHOOK_PUBLIC_URL=https://your-tailscale-url.ts.net bun run scripts/register-webhook.ts
+```
+
+You only need to re-register if the public URL changes — for example, if you move to a different machine or Tailscale domain. Changing `WEBHOOK_PORT` does **not** require re-registration because Tailscale Funnel always serves on public port 443 regardless of the local port.
+
+---
+
+## Knowledge Base
+
+`knowledge-base.md` in the project root is what the pipeline reads when drafting responses. Edit it directly to add:
+
+- Property-specific info (WiFi passwords, parking instructions, check-in codes)
+- General policies (check-in time, pet policy, quiet hours)
+- Response templates for common questions
+
+The more complete this file is, the better the AI drafts will be. If Claude is drafting vague or generic responses, the knowledge base is usually the first place to look.
+
+---
+
+## Skills
+
+The service is built as a set of composable OpenClaw skills. Each skill is a self-contained module in `skills/`.
+
+| Skill | Description |
+|---|---|
+| `hostfully-client` | Hostfully API v3.2 client — fetches messages, leads, properties, and sends replies |
+| `kb-reader` | Knowledge base search — reads and queries `knowledge-base.md` for relevant context |
+| `dedup` | Message deduplication — prevents the same message from being processed twice |
+| `slack-blocks` | Block Kit message builders — constructs the rich Slack approval messages |
+| `slack-bot` | Bolt app and approve/reject/edit handlers — manages the Slack interaction lifecycle |
+| `thread-tracker` | Slack thread grouping — keeps follow-up messages in the same thread |
+| `pipeline` | Full guest message processing pipeline — orchestrates all other skills end-to-end |
+| `audit-logger` | JSONL audit logging — writes a structured log of every pipeline run to `logs/` |
+
+---
+
+## Testing
+
+The simulate script fetches real messages from Hostfully and fires them at the local webhook. You'll see the full pipeline run and a real approval message appear in Slack.
+
+```bash
+# List recent guest messages from Hostfully
+bun run scripts/simulate-webhook.ts --list
+
+# Fire the most recent unprocessed message through the pipeline
+bun run scripts/simulate-webhook.ts
+
+# Fire a specific message by UID
+bun run scripts/simulate-webhook.ts --uid <message-uid>
+
+# Re-fire an already-processed message (ignores dedup)
+bun run scripts/simulate-webhook.ts --force
+```
+
+---
+
+## Troubleshooting
+
+**Messages not appearing in Slack**
+
+1. Check Tailscale Funnel is running:
+   ```bash
+   tailscale funnel status
+   ```
+   If you see "No serve config", restart it:
+   ```bash
+   tailscale funnel --bg $WEBHOOK_PORT
+   ```
+2. Check the service is up:
+   ```bash
+   curl http://localhost:3001/health
+   ```
+3. Check server logs for `[PIPELINE] Failed to post to Slack`. If you see `channel_not_found`, the bot hasn't been invited to the channel — run `/invite @YourBotName` in Slack.
+
+**OpenClaw gateway not running**
+
+```bash
+openclaw gateway start
+# or check current status
+openclaw gateway status
+```
+
+If the gateway was installed as a daemon but isn't running, check your system's service manager or re-run the onboarding command with `--install-daemon`.
+
+**Node version issues**
+
+OpenClaw requires Node.js 22.21+. Confirm your active version:
+
+```bash
+node --version
+```
+
+If it's wrong, check that `.tool-versions` is being picked up by your version manager (`asdf` or `mise`). The file should contain `nodejs 22.21.1`.
+
+**All messages show as "new" after restart**
+
+This is normal if the dedup store was cleared. The store persists across restarts in `data/processed-messages.txt`. To reset it intentionally:
+
+```bash
+truncate -s 0 data/processed-messages.txt
+```
+
+---
+
+## Roadmap
+
+This is Phase 1 of a larger digital employee. The goal is a system that handles the entire guest communication lifecycle, with the CS team in the loop only where it matters.
+
+**v2 (current)**
+- Skill-based architecture via OpenClaw
+- Monitor guest messages via Hostfully webhook
+- AI classification and response drafting
+- Slack approval workflow (approve / reject / edit & send)
+- Local markdown knowledge base
+- Persistent agent memory
+- JSONL audit logging
+
+**Phase 2 — Automation**
+- Auto-respond for high-confidence classifications (>90%) without human approval
+- Pre-arrival messages sent automatically 24h before check-in
+- Unanswered message alerts after 30 minutes
+
+**Phase 3 — Proactive**
+- Review management: monitor and draft responses to guest reviews
+- Cleaning coordinator: notify the cleaning team on new bookings and schedule changes
+- Daily Slack summary: messages handled, response times, auto-response rate
+
+**Phase 4 — Platform**
+- Multi-property routing with a separate knowledge base per property
+- Owner reporting with weekly occupancy and revenue summaries
+- Support for additional PMS platforms (Guesty, Hostaway, Lodgify)
+- Analytics dashboard
