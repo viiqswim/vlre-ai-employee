@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 import type { MultiPropertyKBReader, PropertyMap } from '../kb-reader/multi-reader.js';
 import { askKBAssistant, detectPropertyInQuestion } from './kb-answerer.js';
 import { appendToKB, undoAppend } from './kb-writer.js';
-import { buildKBAnswerBlocks, buildKBDontKnowBlocks, buildKBAddAnswerModal, buildKBAddedConfirmBlocks, buildKBUndoneBlocks } from './kb-blocks.js';
+import { buildKBAnswerBlocks, buildKBDontKnowBlocks, buildKBAddAnswerModal, buildKBAddedConfirmBlocks, buildKBUndoneBlocks, buildKBConfirmedBlocks, buildKBCorrectedBlocks, buildKBCorrectionModal } from './kb-blocks.js';
+import { recordFeedback } from './kb-feedback.js';
+import type { KnownBlock } from '@slack/types';
 
 const COMMON_KB_PATH = 'knowledge-base/common.md';
 const PROPERTY_MAP_PATH = 'knowledge-base/property-map.json';
@@ -46,19 +48,60 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
     const question = stripMention(event.text);
     if (!question) return;
     console.log('[KB-ASSISTANT] Question: "' + question.substring(0, 60) + '..." in channel ' + event.channel);
+
+    let thinkingTs: string | undefined;
+    try {
+      const thinkingMsg = await client.chat.postMessage({
+        channel: event.channel,
+        thread_ts: event.ts,
+        text: '🔍 Searching the knowledge base...',
+      });
+      thinkingTs = typeof thinkingMsg.ts === 'string' ? thinkingMsg.ts : undefined;
+    } catch (e) {
+      console.warn('[KB-ASSISTANT] Failed to post thinking indicator:', e);
+    }
+
+    const postOrUpdate = async (blocks: KnownBlock[], text: string) => {
+      if (thinkingTs) {
+        await client.chat.update({ channel: event.channel, ts: thinkingTs, blocks, text });
+      } else {
+        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks, text });
+      }
+    };
+
     try {
       const propertyMap = loadPropertyMap();
       const detectedProperty = detectPropertyInQuestion(question, propertyMap) ?? undefined;
       const kbContext = kbReader.search(question, detectedProperty);
       const result = await askKBAssistant(question, kbContext);
+
+      const filePath = resolveKBFilePath(question);
+      const searchedFiles: string[] = ['Common knowledge base'];
+      if (detectedProperty !== undefined) {
+        const pmEntry = propertyMap.properties.find((p) =>
+          p.names.some((n) => n === detectedProperty) || p.code === detectedProperty.toLowerCase()
+        );
+        if (pmEntry) {
+          searchedFiles.unshift(pmEntry.code.toUpperCase() + ' — ' + pmEntry.address);
+        }
+      }
+
       if (result.found && result.answer) {
-        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks: buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', resolveKBFilePath(question)), text: result.answer });
+        await postOrUpdate(buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', filePath), result.answer);
         console.log('[KB-ASSISTANT] Answered: "' + question.substring(0, 60) + '..."');
       } else {
-        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks: buildKBDontKnowBlocks(question, event.ts, []), text: "I don't have this info in my knowledge base." });
+        await postOrUpdate(buildKBDontKnowBlocks(question, event.ts, searchedFiles), "I don't have this info in my knowledge base.");
         console.log('[KB-ASSISTANT] Not found: "' + question.substring(0, 60) + '..."');
       }
-    } catch (error) { console.error('[KB-ASSISTANT] app_mention handler error:', error); }
+    } catch (error) {
+      console.error('[KB-ASSISTANT] app_mention handler error:', error);
+      const errorText = "⚠️ Couldn't reach the AI — please try again.";
+      if (thinkingTs) {
+        try { await client.chat.update({ channel: event.channel, ts: thinkingTs, text: errorText }); } catch { /* ignore */ }
+      } else {
+        try { await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, text: errorText }); } catch { /* ignore */ }
+      }
+    }
   });
 
   app.action('kb_add_answer', async ({ ack, body, client }) => {
@@ -113,5 +156,85 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
     } catch (error) { console.error('[KB-ASSISTANT] kb_undo_add error:', error); }
   });
 
-  console.log('[KB-ASSISTANT] Handlers registered (app_mention, kb_add_answer, kb_add_answer_modal, kb_undo_add)');
+  app.action('kb_confirm_answer', async ({ ack, body, client }) => {
+    await ack();
+    const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
+    const userId = body.user.id;
+    const channelId = (body as { channel?: { id?: string } }).channel?.id ?? '';
+    const messageTs = (body as { message?: { ts?: string } }).message?.ts ?? '';
+    let question = '', answer = '', source = '', filePath = '';
+    try {
+      const p = JSON.parse(action?.value ?? '{}') as { question?: string; answer?: string; source?: string; filePath?: string };
+      question = p.question ?? ''; answer = p.answer ?? ''; source = p.source ?? ''; filePath = p.filePath ?? '';
+    } catch { console.error('[KB-ASSISTANT] kb_confirm_answer: failed to parse button value'); return; }
+    recordFeedback({ type: 'correct', question, aiAnswer: answer, filePath, userId }).catch((e) =>
+      console.error('[KB-ASSISTANT] kb_confirm_answer: feedback write failed:', e)
+    );
+    if (channelId && messageTs) {
+      try {
+        await client.chat.update({ channel: channelId, ts: messageTs, blocks: buildKBConfirmedBlocks(question, answer, source, userId), text: '✅ Answer confirmed' });
+      } catch (e) { console.error('[KB-ASSISTANT] kb_confirm_answer: failed to update message:', e); }
+    }
+    console.log('[KB-ASSISTANT] Answer confirmed by ' + userId);
+  });
+
+  app.action('kb_incorrect_answer', async ({ ack, body, client }) => {
+    await ack();  // MUST be first — trigger_id expires in 3s
+    const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
+    const triggerId = (body as { trigger_id?: string }).trigger_id ?? '';
+    const channelId = (body as { channel?: { id?: string } }).channel?.id ?? '';
+    const messageTs = (body as { message?: { ts?: string } }).message?.ts ?? '';
+    let question = '', answer = '', filePath = '';
+    try {
+      const p = JSON.parse(action?.value ?? '{}') as { question?: string; answer?: string; filePath?: string };
+      question = p.question ?? ''; answer = p.answer ?? ''; filePath = p.filePath ?? '';
+    } catch { console.error('[KB-ASSISTANT] kb_incorrect_answer: failed to parse button value'); return; }
+    // Open correction modal IMMEDIATELY (trigger_id expires in 3s)
+    try {
+      await client.views.open({
+        trigger_id: triggerId,
+        view: buildKBCorrectionModal(question, answer, channelId, messageTs, filePath) as Parameters<typeof client.views.open>[0]['view'],
+      });
+    } catch (e) { console.error('[KB-ASSISTANT] kb_incorrect_answer: failed to open modal:', e); }
+    console.log('[KB-ASSISTANT] Correction modal opened by ' + body.user.id);
+  });
+
+  app.view('kb_correction_modal', async ({ ack, body, client, view }) => {
+    const correctionText = (view.state.values['correction_block']?.['correction_input']?.value ?? '').trim();
+    if (!correctionText) {
+      await ack({ response_action: 'errors', errors: { correction_block: 'Please provide a correction before submitting.' } });
+      return;
+    }
+    await ack();
+    const userId = body.user.id;
+    let question = '', originalAnswer = '', channelId = kbChannelId, messageTs = '', filePath = '';
+    try {
+      const m = JSON.parse(view.private_metadata) as { question?: string; originalAnswer?: string; channelId?: string; messageTs?: string; filePath?: string };
+      question = m.question ?? ''; originalAnswer = m.originalAnswer ?? ''; channelId = m.channelId ?? kbChannelId; messageTs = m.messageTs ?? ''; filePath = m.filePath ?? COMMON_KB_PATH;
+    } catch { console.error('[KB-ASSISTANT] kb_correction_modal: failed to parse private_metadata'); }
+    try {
+      const appendResult = await appendToKB(filePath, correctionText);
+      recordFeedback({ type: 'incorrect', question, aiAnswer: originalAnswer, correction: correctionText, filePath, userId }).catch((e) =>
+        console.error('[KB-ASSISTANT] kb_correction_modal: feedback write failed:', e)
+      );
+      if (channelId && messageTs) {
+        await client.chat.update({
+          channel: channelId,
+          ts: messageTs,
+          blocks: buildKBCorrectedBlocks(question, appendResult.appendedText, filePath, userId),
+          text: '✏️ Correction saved',
+        });
+      }
+      console.log('[KB-ASSISTANT] Correction saved to ' + filePath + ' by ' + userId);
+    } catch (error) {
+      console.error('[KB-ASSISTANT] kb_correction_modal error:', error);
+      if (channelId && messageTs) {
+        try {
+          await client.chat.postMessage({ channel: channelId, text: '⚠️ Failed to save the correction. Please try again.' });
+        } catch { /* ignore */ }
+      }
+    }
+  });
+
+  console.log('[KB-ASSISTANT] Handlers registered (app_mention, kb_add_answer, kb_add_answer_modal, kb_undo_add, kb_confirm_answer, kb_incorrect_answer, kb_correction_modal)');
 }
