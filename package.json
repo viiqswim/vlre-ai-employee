@@ -17,6 +17,7 @@
   "dependencies": {
     "@slack/bolt": "^4.6.0",
     "@slack/types": "^2.20.1",
+    "xlsx": "^0.18.5",
     "zx": "^8.8.5"
   }
 }
