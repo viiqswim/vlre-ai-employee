@@ -365,17 +365,26 @@ export async function processWebhookMessage(
   try {
     const thread = await hostfullyClient.getThread(thread_uid);
     threadLeadUid = thread.participants?.find((p) => p.participantType === 'LEAD')?.participantUid;
-    if (thread.messages && thread.messages.length > 1) {
-      conversationHistory = thread.messages
-        .slice(-30)
-        .map((m) => `[${m.senderType ?? 'Unknown'}]: ${m.content}`)
-        .join('\n');
-    }
   } catch (error) {
     console.warn(`[PIPELINE] Could not fetch thread history: ${error}`);
   }
 
   const leadUid = lead_uid ?? threadLeadUid ?? '';
+  if (leadUid) {
+    try {
+      const allMessages = await hostfullyClient.getMessages(leadUid);
+      const threadMessages = allMessages
+        .filter((m) => (!m.threadUid || m.threadUid === thread_uid) && m.uid !== message_uid)
+        .sort((a, b) => (new Date(a.createdAt).getTime() || 0) - (new Date(b.createdAt).getTime() || 0))
+        .slice(-30);
+      conversationHistory = threadMessages
+        .map((m) => `[${m.senderType || 'Unknown'}]: ${m.content}`)
+        .join('\n');
+      console.log(`[PIPELINE] Fetched ${allMessages.length} messages for lead ${leadUid}, ${threadMessages.length} in thread ${thread_uid}`);
+    } catch (error) {
+      console.warn(`[PIPELINE] Could not fetch message history: ${error}`);
+    }
+  }
   let lead = null as Awaited<ReturnType<HostfullyClient['getLead']>> | null;
   if (leadUid) {
     try {
