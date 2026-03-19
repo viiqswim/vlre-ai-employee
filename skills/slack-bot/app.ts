@@ -66,7 +66,16 @@ export function createSlackApp(config: SlackBotConfig = {}): App {
 
 export async function startSlackApp(app: App): Promise<void> {
   await app.start();
-  console.log('[SLACK] ⚡ Bolt app connected via Socket Mode');
+  console.log('[SLACK] ⚡ Socket Mode WebSocket connected');
+  // Slack takes 10-30s after WebSocket connect to activate event routing on their side.
+  // Without this wait, the first messages sent to the bot are silently dropped by Slack.
+  // SLACK_WARMUP_MS defaults to 15000 (15s) — increase if first messages still drop.
+  const warmupMs = parseInt(process.env['SLACK_WARMUP_MS'] ?? '15000', 10);
+  if (warmupMs > 0) {
+    console.log(`[SLACK] Waiting ${warmupMs / 1000}s for Slack event routing to activate...`);
+    await new Promise<void>((resolve) => setTimeout(resolve, warmupMs));
+  }
+  console.log('[SLACK] ⚡ Bolt app ready — event routing active');
 }
 
 export async function stopSlackApp(app: App): Promise<void> {
