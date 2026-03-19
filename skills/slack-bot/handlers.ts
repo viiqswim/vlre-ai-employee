@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import type { App } from '@slack/bolt';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
+import { registerRuleHandlers } from './rule-handlers.js';
 import {
   buildApprovedBlocks,
   buildRejectedBlocks,
@@ -337,5 +338,6 @@ export function registerAllHandlers(
   registerApproveHandler(app, hostfullyClient, threadTracker);
   registerRejectHandler(app, threadTracker);
   registerEditHandler(app, hostfullyClient, threadTracker);
-  console.log('[SLACK] All action handlers registered (approve, reject, edit)');
+  registerRuleHandlers(app);
+  console.log('[SLACK] All action handlers registered (approve, reject, edit, rules)');
 }
