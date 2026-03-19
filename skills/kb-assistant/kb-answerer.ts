@@ -88,6 +88,82 @@ export function parseKBAnswer(responseText: string): KBAnswerResult {
   } catch { return { found: false, answer: null, source: null }; }
 }
 
+export async function formatKBEntry(question: string, rawAnswer: string): Promise<string> {
+  const proxyUrl = process.env['CLAUDE_PROXY_URL'] ?? 'http://127.0.0.1:3456';
+  const apiKey = process.env['ANTHROPIC_API_KEY'];
+  const model = process.env['CLAUDE_MODEL'] ?? 'claude-3-5-sonnet-20241022';
+  const mode = process.env['CLAUDE_MODE'] ?? (apiKey ? 'api' : 'proxy');
+  const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
+
+  const fallback = () => {
+    const title = rawAnswer.substring(0, 60);
+    return '### ' + title + '\nQ: ' + question + '\nA: ' + rawAnswer;
+  };
+
+  const prompt = [
+    'A team member was asked this question about a rental property:',
+    '"' + question + '"',
+    '',
+    'They provided this answer:',
+    '"' + rawAnswer + '"',
+    '',
+    'Write a concise, ENGLISH-LANGUAGE knowledge base entry that:',
+    '1. Has a descriptive heading (### Topic — Subtopic)',
+    '2. Contains the answer clearly',
+    '3. Includes relevant English search keywords (and Spanish equivalents if the original question was in Spanish)',
+    '4. Is generic enough to match similar future questions about the same topic',
+    '5. Is 2-5 lines max, no fluff',
+    '',
+    'Output ONLY the formatted entry text, no preamble, no explanation.',
+  ].join('\n');
+
+  try {
+    let responseText: string;
+    if (mode === 'proxy') {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            max_tokens: 300,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+        if (!response.ok) return fallback();
+        const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+        responseText = data.choices?.[0]?.message?.content?.trim() ?? '';
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } else {
+      if (!apiKey) return fallback();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({ model, max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+        });
+        if (!response.ok) return fallback();
+        const data = await response.json() as { content: Array<{ type: string; text: string }> };
+        responseText = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? '';
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+    if (!responseText) return fallback();
+    return responseText;
+  } catch {
+    return fallback();
+  }
+}
+
 export function detectPropertyInQuestion(question: string, propertyMap: PropertyMap): string | null {
   if (!question || !propertyMap?.properties?.length) return null;
   const questionLower = question.toLowerCase();

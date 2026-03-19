@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { parseKBAnswer, detectPropertyInQuestion, askKBAssistant } from './kb-answerer.js';
+import { parseKBAnswer, detectPropertyInQuestion, askKBAssistant, formatKBEntry } from './kb-answerer.js';
 import type { PropertyMap } from '../kb-reader/multi-reader.js';
 
 const SAMPLE_MAP: PropertyMap = {
@@ -129,5 +129,43 @@ describe('askKBAssistant timeout', () => {
     expect(result.found).toBe(false);
     expect(result.answer).toBeNull();
     expect(result.source).toBeNull();
+  });
+});
+
+describe('formatKBEntry', () => {
+  const origFetch = globalThis.fetch;
+  const origEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    process.env = origEnv;
+  });
+
+  test("returns fallback when fetch throws", async () => {
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    (globalThis.fetch as any) = async () => {
+      throw new Error('Network error');
+    };
+
+    const result = await formatKBEntry('¿Qué marca es la lavadora?', 'Samsung');
+    expect(result).toContain('### Samsung');
+    expect(result).toContain('Q: ¿Qué marca');
+    expect(result).toContain('A: Samsung');
+  });
+
+  test("fallback includes question and answer", async () => {
+    process.env['CLAUDE_MODE'] = 'api';
+    delete process.env['ANTHROPIC_API_KEY'];
+
+    const result = await formatKBEntry('What is the WiFi?', 'Network: Patitos-2g');
+    expect(result).toBeTruthy();
+    expect(result).toContain('WiFi');
+    expect(result).toContain('Patitos');
   });
 });
