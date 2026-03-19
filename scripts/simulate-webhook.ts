@@ -200,7 +200,7 @@ console.log();
 const healthResp = await fetch(`http://localhost:${WEBHOOK_PORT}/health`).catch(() => null);
 if (!healthResp?.ok) {
   console.error(red(`❌ Local service not running at http://localhost:${WEBHOOK_PORT}`));
-  console.error(dim('   Start it with: ./start.sh'));
+  console.error(dim('   Start it with: bun run start'));
   process.exit(1);
 }
 
