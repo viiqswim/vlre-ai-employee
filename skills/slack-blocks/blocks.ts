@@ -23,6 +23,16 @@ export interface ApprovalMessageParams {
   messageUid: string;
   threadUid: string;
   leadUid: string;
+  urgency: boolean;
+}
+
+export interface PostActionContext {
+  guestName: string;
+  propertyName: string;
+  checkInDate: string;
+  checkOutDate: string;
+  threadUid: string;
+  leadUid: string;
 }
 
 /** Format confidence as a display string with emoji indicator */
@@ -54,18 +64,39 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
     messageUid: params.messageUid,
     threadUid: params.threadUid,
     leadUid: params.leadUid,
-    draftResponse: params.draftResponse.substring(0, 1500),
+    guestName: params.guestName,
+    propertyName: params.propertyName,
+    checkInDate: params.checkInDate,
+    checkOutDate: params.checkOutDate,
+    draftResponse: params.draftResponse.substring(0, 1200),
   });
+
+  // Conditional header text based on urgency
+  const headerText = params.urgency
+    ? `🚨 URGENT — ${params.propertyName}`
+    : `🏠 New Guest Message — ${params.propertyName}`;
+
+  // Urgency callout block (only for urgent messages)
+  const urgencyBlocks: KnownBlock[] = params.urgency ? [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*⚠️ This message requires immediate attention.* The guest may be reporting a safety issue, access problem, or emergency.`,
+      },
+    },
+  ] : [];
 
   return [
     {
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `🏠 New Guest Message — ${params.propertyName}`,
+        text: headerText,
         emoji: true,
       },
     },
+    ...urgencyBlocks,
     {
       type: 'context',
       elements: [
@@ -141,8 +172,25 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
 /**
  * Build the "approved" state — replaces the approval message after CS team approves.
  */
-export function buildApprovedBlocks(approverUserId: string, sentResponse: string): KnownBlock[] {
+export function buildApprovedBlocks(
+  approverUserId: string,
+  sentResponse: string,
+  context: PostActionContext,
+): KnownBlock[] {
   return [
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
+      ],
+    },
     {
       type: 'section',
       text: {
@@ -165,8 +213,21 @@ export function buildApprovedBlocks(approverUserId: string, sentResponse: string
 /**
  * Build the "rejected" state — replaces the approval message after CS team rejects.
  */
-export function buildRejectedBlocks(rejectorUserId: string): KnownBlock[] {
+export function buildRejectedBlocks(rejectorUserId: string, context: PostActionContext): KnownBlock[] {
   return [
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
+      ],
+    },
     {
       type: 'section',
       text: {
@@ -177,23 +238,58 @@ export function buildRejectedBlocks(rejectorUserId: string): KnownBlock[] {
   ];
 }
 
-export function buildSupersededBlocks(): KnownBlock[] {
-  return [
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `⏭️ *Superseded* — a newer message from this guest is pending review below.\n_This suggested response was not sent._`,
-      },
+export function buildSupersededBlocks(context?: PostActionContext): KnownBlock[] {
+  const blocks: KnownBlock[] = [];
+
+  if (context) {
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
+      ],
+    });
+  }
+
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `⏭️ *Superseded* — a newer message from this guest is pending review below.\n_This suggested response was not sent._`,
     },
-  ];
+  });
+
+  return blocks;
 }
 
 /**
  * Build the "edited and sent" state — replaces the approval message after CS team edits.
  */
-export function buildEditedBlocks(editorUserId: string, editedResponse: string): KnownBlock[] {
+export function buildEditedBlocks(
+  editorUserId: string,
+  editedResponse: string,
+  context: PostActionContext,
+): KnownBlock[] {
   return [
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
+      ],
+    },
     {
       type: 'section',
       text: {
@@ -216,16 +312,34 @@ export function buildEditedBlocks(editorUserId: string, editedResponse: string):
 /**
  * Build an error state — shown when Hostfully send fails after approval.
  */
-export function buildErrorBlocks(errorMessage: string): KnownBlock[] {
-  return [
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `🚨 *Send failed* — ${errorMessage}\n_The response was NOT sent to the guest. Please send manually._`,
-      },
+export function buildErrorBlocks(errorMessage: string, context?: PostActionContext): KnownBlock[] {
+  const blocks: KnownBlock[] = [];
+
+  if (context) {
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
+      ],
+    });
+  }
+
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `🚨 *Send failed* — ${errorMessage}\n_The response was NOT sent to the guest. Please send manually._`,
     },
-  ];
+  });
+
+  return blocks;
 }
 
 /**
@@ -246,6 +360,7 @@ export function buildEditModal(params: {
     threadUid: params.threadUid,
     leadUid: params.leadUid,
     messageUid: params.messageUid,
+    draftResponse: params.draftResponse.substring(0, 1000),
   });
 
   return {

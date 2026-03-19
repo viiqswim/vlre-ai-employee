@@ -43,6 +43,7 @@ interface ClassifyResult {
   summary: string;
   category: string;
   conversationSummary: string | null;
+  urgency: boolean;
 }
 
 const BOT_NAME = process.env['BOT_NAME'] ?? 'Papi Chulo';
@@ -65,6 +66,12 @@ IMPORTANT RULES:
 - Keep responses concise but complete (2-4 sentences typically)
 - Match the communication channel style (Airbnb: casual, Booking.com: formal)
 
+SIGNATURE RULES:
+- NEVER add any signature, sign-off, or closing to your draftResponse
+- NEVER end with phrases like: "Best regards", "Warm regards", "Kind regards", "Sincerely", "Best wishes", "Yours truly", "From your management team", "From VL Real Estate", "The VL Real Estate Team", "Your hosts", "Your management team"
+- NEVER add any "From [name/team]" line at the end
+- Just end the message naturally after your last point — no closing, no name, no sign-off
+
 You MUST respond with valid JSON in this exact format:
 {
   "classification": "NEEDS_APPROVAL",
@@ -73,7 +80,8 @@ You MUST respond with valid JSON in this exact format:
   "draftResponse": "<the response to send to the guest>",
   "summary": "<one-line summary for the CS team, e.g.: 'WiFi password request — Lakewood Retreat'>",
   "category": "<one of: wifi, access, early-checkin, late-checkout, parking, amenities, maintenance, noise, pets, refund, other>",
-  "conversationSummary": "<if there is prior conversation history, write 2-3 sentences summarising the full thread so far. If this is the first message in the thread, set this to null>"
+  "conversationSummary": "<if there is prior conversation history, write 2-3 sentences summarising the full thread so far. If this is the first message in the thread, set this to null>",
+  "urgency": true or false — set to true ONLY for: guest locked out, can't access property, gas/CO smell, flooding, fire, broken windows/doors/locks, mold/pests, police involvement, medical emergency, immediate safety threats. Set to false for all routine questions (WiFi, check-in times, amenities, parking).
 }
 
 Confidence guidelines:
@@ -104,23 +112,24 @@ function parseClassifyResponse(responseText: string): ClassifyResult {
     responseText.match(/```(?:json)?\s*([\s\S]+?)\s*```/) ??
     responseText.match(/(\{[\s\S]+\})/);
 
-  const jsonString = jsonMatch?.[1] ?? responseText;
+   const jsonString = jsonMatch?.[1] ?? responseText;
 
-  let parsed: Partial<ClassifyResult>;
-  try {
-    parsed = JSON.parse(jsonString) as Partial<ClassifyResult>;
-  } catch {
-    console.error('[PIPELINE] Failed to parse Claude JSON response — using fallback');
-    return {
-      classification: 'NEEDS_APPROVAL',
-      confidence: 0.3,
-      reasoning: 'Failed to parse Claude response — manual review required',
-      draftResponse: 'Thank you for your message! A member of our team will get back to you shortly.',
-      summary: 'Classification failed — manual review needed',
-      category: 'other',
-      conversationSummary: null,
-    };
-  }
+   let parsed: Partial<ClassifyResult>;
+   try {
+     parsed = JSON.parse(jsonString) as Partial<ClassifyResult>;
+   } catch {
+     console.error('[PIPELINE] Failed to parse Claude JSON response — using fallback');
+     return {
+       classification: 'NEEDS_APPROVAL',
+       confidence: 0.3,
+       reasoning: 'Failed to parse Claude response — manual review required',
+       draftResponse: 'Thank you for your message! A member of our team will get back to you shortly.',
+       summary: 'Classification failed — manual review needed',
+       category: 'other',
+       conversationSummary: null,
+       urgency: false,
+     };
+   }
 
   return {
     classification: 'NEEDS_APPROVAL',
@@ -130,6 +139,7 @@ function parseClassifyResponse(responseText: string): ClassifyResult {
     summary: parsed.summary ?? 'Guest message requires review',
     category: parsed.category ?? 'other',
     conversationSummary: parsed.conversationSummary ?? null,
+    urgency: parsed.urgency === true,
   };
 }
 
@@ -381,6 +391,7 @@ export async function processWebhookMessage(
       messageUid: message_uid,
       threadUid: thread_uid,
       leadUid,
+      urgency: classifyResult.urgency,
     });
 
     const pending = threadTracker.getPending(thread_uid);
@@ -410,7 +421,10 @@ export async function processWebhookMessage(
     const postResult = await slackApp.client.chat.postMessage({
       channel: slackChannelId,
       blocks,
-      text: `New guest message from ${guestName} at ${propertyName}: ${classifyResult.summary}`,
+      text: classifyResult.urgency
+        ? `🚨 URGENT: ${guestName} at ${propertyName}: ${classifyResult.summary}`
+        : `New guest message from ${guestName} at ${propertyName}: ${classifyResult.summary}`,
+      ...(classifyResult.urgency ? { attachments: [{ color: '#E74C3C', blocks: [] as never[] }] } : {}),
       ...(pending ? { thread_ts: pending.slackTs } : {}),
     });
 
@@ -418,7 +432,7 @@ export async function processWebhookMessage(
       threadTracker.track(thread_uid, postResult.ts, slackChannelId, message_uid);
     }
 
-    console.log(`[PIPELINE] ✅ Posted approval message to Slack for ${guestName} at ${propertyName}`);
+    console.log(`[PIPELINE] ✅ Posted ${classifyResult.urgency ? '🚨 URGENT ' : ''}approval message to Slack for ${guestName} at ${propertyName}`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[PIPELINE] Failed to post to Slack: ${msg}`);

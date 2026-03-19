@@ -8,12 +8,17 @@ import {
   buildEditedBlocks,
   buildErrorBlocks,
   buildEditModal,
+  type PostActionContext,
 } from '../slack-blocks/blocks.ts';
 
 interface ButtonMetadata {
   messageUid: string;
   threadUid: string;
   leadUid: string;
+  guestName: string;
+  propertyName: string;
+  checkInDate: string;
+  checkOutDate: string;
   draftResponse: string;
 }
 
@@ -23,6 +28,7 @@ interface ModalMetadata {
   threadUid: string;
   leadUid: string;
   messageUid: string;
+  draftResponse: string;
 }
 
 function parseMetadata(value: string): ButtonMetadata {
@@ -80,10 +86,19 @@ export function registerApproveHandler(
       console.log(`[SLACK] Approve: sent message to thread ${metadata.threadUid}`);
       threadTracker.clear(metadata.threadUid);
 
+      const context: PostActionContext = {
+        guestName: metadata.guestName ?? '',
+        propertyName: metadata.propertyName ?? '',
+        checkInDate: metadata.checkInDate ?? '',
+        checkOutDate: metadata.checkOutDate ?? '',
+        threadUid: metadata.threadUid,
+        leadUid: metadata.leadUid,
+      };
+
       await client.chat.update({
         channel: channelId,
         ts: messageTs,
-        blocks: buildApprovedBlocks(userId, metadata.draftResponse),
+        blocks: buildApprovedBlocks(userId, metadata.draftResponse, context),
         text: `✅ Approved and sent by <@${userId}>`,
       });
 
@@ -93,6 +108,7 @@ export function registerApproveHandler(
         messageUid: metadata.messageUid,
         threadUid: metadata.threadUid,
         hostfullySendSuccess: true,
+        approvedDraft: metadata.draftResponse,
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -134,9 +150,10 @@ export function registerRejectHandler(app: App, threadTracker: SlackThreadTracke
     const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
     let messageUid = 'unknown';
     let threadUid = 'unknown';
+    let meta: Partial<ButtonMetadata> = {};
     if (action?.value) {
       try {
-        const meta = JSON.parse(action.value) as { threadUid?: string; messageUid?: string };
+        meta = JSON.parse(action.value) as Partial<ButtonMetadata>;
         if (meta.threadUid) {
           threadUid = meta.threadUid;
           threadTracker.clear(meta.threadUid);
@@ -146,10 +163,19 @@ export function registerRejectHandler(app: App, threadTracker: SlackThreadTracke
     }
 
     try {
+      const context: PostActionContext = {
+        guestName: meta.guestName ?? '',
+        propertyName: meta.propertyName ?? '',
+        checkInDate: meta.checkInDate ?? '',
+        checkOutDate: meta.checkOutDate ?? '',
+        threadUid: threadUid,
+        leadUid: meta.leadUid ?? '',
+      };
+
       await client.chat.update({
         channel: channelId,
         ts: messageTs,
-        blocks: buildRejectedBlocks(userId),
+        blocks: buildRejectedBlocks(userId, context),
         text: `❌ Rejected by <@${userId}>`,
       });
 
@@ -227,10 +253,19 @@ export function registerEditHandler(
       console.log('[SLACK] Edit: sent edited message');
       threadTracker.clear(modalMetadata.threadUid);
 
+      const context: PostActionContext = {
+        guestName: '',
+        propertyName: '',
+        checkInDate: '',
+        checkOutDate: '',
+        threadUid: modalMetadata.threadUid,
+        leadUid: modalMetadata.leadUid,
+      };
+
       await client.chat.update({
         channel: modalMetadata.channelId,
         ts: modalMetadata.messageTs,
-        blocks: buildEditedBlocks(userId, editedText),
+        blocks: buildEditedBlocks(userId, editedText, context),
         text: `✏️ Edited and sent by <@${userId}>`,
       });
 
@@ -240,6 +275,8 @@ export function registerEditHandler(
         messageUid: modalMetadata.messageUid,
         threadUid: modalMetadata.threadUid,
         hostfullySendSuccess: true,
+        originalDraft: modalMetadata.draftResponse ?? '',
+        editedText,
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
