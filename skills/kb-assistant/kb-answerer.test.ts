@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
-import { parseKBAnswer, detectPropertyInQuestion } from './kb-answerer.js';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { parseKBAnswer, detectPropertyInQuestion, askKBAssistant } from './kb-answerer.js';
 import type { PropertyMap } from '../kb-reader/multi-reader.js';
 
 const SAMPLE_MAP: PropertyMap = {
@@ -51,5 +51,83 @@ describe('detectPropertyInQuestion', () => {
 
   test("returns null for empty question", () => {
     expect(detectPropertyInQuestion('', SAMPLE_MAP)).toBeNull();
+  });
+});
+
+describe('askKBAssistant timeout', () => {
+  const origFetch = globalThis.fetch;
+  const origEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    process.env = origEnv;
+  });
+
+  test("uses CLAUDE_TIMEOUT_MS env var when set", async () => {
+    process.env['CLAUDE_TIMEOUT_MS'] = '5000';
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    let capturedTimeoutMs = 0;
+    const origSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: any, ms: number) => {
+      capturedTimeoutMs = ms;
+      return origSetTimeout(fn, ms);
+    }) as any;
+
+    (globalThis.fetch as any) = async () => {
+      return new Response(JSON.stringify({ choices: [{ message: { content: '{"found": false}' } }] }));
+    };
+
+    try {
+      await askKBAssistant('test', 'context');
+      expect(capturedTimeoutMs).toBe(5000);
+    } finally {
+      globalThis.setTimeout = origSetTimeout;
+    }
+  });
+
+  test("defaults to 30000ms when CLAUDE_TIMEOUT_MS not set", async () => {
+    delete process.env['CLAUDE_TIMEOUT_MS'];
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    let capturedTimeoutMs = 0;
+    const origSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: any, ms: number) => {
+      capturedTimeoutMs = ms;
+      return origSetTimeout(fn, ms);
+    }) as any;
+
+    (globalThis.fetch as any) = async () => {
+      return new Response(JSON.stringify({ choices: [{ message: { content: '{"found": false}' } }] }));
+    };
+
+    try {
+      await askKBAssistant('test', 'context');
+      expect(capturedTimeoutMs).toBe(30000);
+    } finally {
+      globalThis.setTimeout = origSetTimeout;
+    }
+  });
+
+  test("handles abort error gracefully", async () => {
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    (globalThis.fetch as any) = async () => {
+      const error = new Error('The operation was aborted');
+      (error as any).name = 'AbortError';
+      throw error;
+    };
+
+    const result = await askKBAssistant('test question', 'test context');
+    expect(result.found).toBe(false);
+    expect(result.answer).toBeNull();
+    expect(result.source).toBeNull();
   });
 });
