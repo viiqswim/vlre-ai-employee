@@ -17,6 +17,18 @@ export function createSlackApp(config: SlackBotConfig = {}): App {
     logLevel: LogLevel.WARN,
   });
 
+  // Diagnostic: log all incoming Slack payloads (remove after issue resolved)
+  app.use(async (args) => {
+    const body = args.body as Record<string, unknown>;
+    const event = body['event'] as Record<string, unknown> | undefined;
+    if (event?.['type']) {
+      console.log('[SLACK-DEBUG] event:', event['type'], '| channel:', event['channel'] ?? 'N/A');
+    } else if (body['type']) {
+      console.log('[SLACK-DEBUG] payload:', body['type']);
+    }
+    await args.next();
+  });
+
   app.message('ping', async ({ message, say }) => {
     if (message.subtype === undefined) {
       await say('pong 🏓 OpenClaw is online!');
