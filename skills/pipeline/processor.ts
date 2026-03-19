@@ -5,7 +5,8 @@ import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import { buildApprovalBlocks, buildErrorBlocks, buildSupersededBlocks } from '../slack-blocks/blocks.ts';
 import { withRetry } from './retry.js';
 import { appendAuditLog } from '../audit-logger/audit-logger.ts';
-import { loadLearnedRules, type LearnedRule } from './learned-rules.ts';
+import { type LearnedRule } from './learned-rules.ts';
+import { getConfirmedRules } from './rules-store.js';
 
 export interface WebhookPayload {
   event_type: string;
@@ -119,9 +120,8 @@ Confidence guidelines:
 - 0.5-0.7: Moderate confidence, CS team may want to adjust
 - <0.5: Low confidence — escalation triggers, complex situation, or no KB match`;
 
-// Load confirmed learned rules at startup (synchronous, one-time)
-const learnedRules: LearnedRule[] = loadLearnedRules();
-console.log(`[PIPELINE] Loaded ${learnedRules.length} learned rule(s) from CS team feedback`);
+// Load confirmed learned rules at startup (hot-reload via getConfirmedRules)
+console.log(`[PIPELINE] Loaded ${getConfirmedRules().length} learned rule(s) from CS team feedback`);
 
 /** Build a prompt section from confirmed learned rules. Returns '' if no rules. */
 export function buildLearnedRulesPrompt(rules: LearnedRule[]): string {
@@ -191,8 +191,8 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
   const retryAttempts = parseInt(process.env['CLAUDE_RETRY_ATTEMPTS'] ?? '2', 10);
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
-  const userMessage = buildUserMessage(params);
-  const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(learnedRules);
+   const userMessage = buildUserMessage(params);
+   const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(getConfirmedRules());
 
   let responseText = '';
   let useApiMode = mode !== 'proxy';
