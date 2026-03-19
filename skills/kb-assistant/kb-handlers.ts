@@ -37,7 +37,11 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
   if (!kbChannelId) { console.warn('[KB-ASSISTANT] SLACK_KB_CHANNEL_ID not set — KB assistant disabled'); return; }
 
   app.event('app_mention', async ({ event, client }) => {
-    if (event.channel !== kbChannelId) return;
+    console.log('[KB-ASSISTANT] app_mention received — channel: ' + event.channel + ' (expected: ' + kbChannelId + ')');
+    if (event.channel !== kbChannelId) {
+      console.warn('[KB-ASSISTANT] Ignoring event from channel ' + event.channel + ' — not the KB channel (' + kbChannelId + '). Check SLACK_KB_CHANNEL_ID in .env');
+      return;
+    }
     if ('bot_id' in event && event.bot_id) return;
     const question = stripMention(event.text);
     if (!question) return;
