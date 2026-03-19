@@ -76,7 +76,14 @@ export class HostfullyClient {
       'GET',
       `/messages?leadUid=${encodeURIComponent(leadUid)}`
     );
-    return response.messages ?? [];
+    return (response.messages ?? []).map((m) => {
+      const contentRaw = m.content as unknown as { subject?: string | null; text?: string } | string | undefined;
+      const contentText =
+        typeof contentRaw === 'object' && contentRaw !== null
+          ? (contentRaw.text ?? '')
+          : (contentRaw ?? '');
+      return { ...m, content: contentText as string };
+    });
   }
 
   async getThread(threadUid: string): Promise<HostfullyThread> {

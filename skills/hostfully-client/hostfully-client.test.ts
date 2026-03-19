@@ -344,3 +344,48 @@ describe('error handling', () => {
     await expect(client.getMessage('any-uid')).rejects.toThrow(/rate limit/i);
   });
 });
+
+describe('getMessages', () => {
+  test('extracts content.text from object-shaped content', async () => {
+    const apiPayload = {
+      messages: [
+        {
+          uid: 'msg-1',
+          threadUid: 'thread-1',
+          leadUid: 'lead-1',
+          createdAt: '2024-01-01T00:00:00Z',
+          content: { subject: null, text: 'Hello from the guest!' },
+          senderType: 'GUEST',
+        },
+      ],
+    };
+    fetchMock = mock(() => Promise.resolve(mockResponse(apiPayload)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const messages = await client.getMessages('lead-1');
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.content).toBe('Hello from the guest!');
+  });
+
+  test('passes through content that is already a plain string', async () => {
+    const apiPayload = {
+      messages: [
+        {
+          uid: 'msg-2',
+          threadUid: 'thread-1',
+          leadUid: 'lead-1',
+          createdAt: '2024-01-01T00:00:00Z',
+          content: 'Already a string',
+          senderType: 'PROPERTY_MANAGER',
+        },
+      ],
+    };
+    fetchMock = mock(() => Promise.resolve(mockResponse(apiPayload)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const messages = await client.getMessages('lead-1');
+
+    expect(messages[0]?.content).toBe('Already a string');
+  });
+});

@@ -57,4 +57,9 @@ describe('buildFallbackSummary', () => {
     const resolved = claudeSummary || (conversationHistory.trim() ? buildFallbackSummary(conversationHistory) : null);
     expect(resolved).toBe('Guest asked about something. Host replied.');
   });
+
+  test('AGENCY sender treated as Host', () => {
+    const input = '[AGENCY]: We have received your reservation';
+    expect(buildFallbackSummary(input)).toBe('Host: We have received your reservation');
+  });
 });

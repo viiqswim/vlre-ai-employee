@@ -148,6 +148,7 @@ export function buildFallbackSummary(conversationHistory: string): string {
       .replace(/^\[GUEST\]:\s*/i, 'Guest: ')
       .replace(/^\[TRAVELER\]:\s*/i, 'Guest: ')
       .replace(/^\[PROPERTY_MANAGER\]:\s*/i, 'Host: ')
+      .replace(/^\[AGENCY\]:\s*/i, 'Host: ')
       .replace(/^\[Unknown\]:\s*/i, ''),
   );
 
