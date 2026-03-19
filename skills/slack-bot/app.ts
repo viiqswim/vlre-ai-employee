@@ -1,4 +1,4 @@
-import { App, LogLevel } from '@slack/bolt';
+import { App, LogLevel, SocketModeReceiver } from '@slack/bolt';
 
 export interface SlackBotConfig {
   botToken?: string;
@@ -10,10 +10,32 @@ export function createSlackApp(config: SlackBotConfig = {}): App {
   const botToken = config.botToken ?? process.env['SLACK_BOT_TOKEN'] ?? '';
   const appToken = config.appToken ?? process.env['SLACK_APP_TOKEN'] ?? '';
 
+  // Use explicit SocketModeReceiver so we can configure ping/pong timeouts.
+  // Default clientPingTimeout is 5s — too short when proxy calls take 15-30s.
+  // When the pong is delayed, Slack marks the connection unhealthy and silently drops
+  // subsequent events (bolt-js #2196, bolt-python #1246).
+  const receiver = new SocketModeReceiver({
+    appToken,
+    logLevel: LogLevel.WARN,
+  });
+
+  // Increase ping/pong timeouts. These are plain JS properties set during SocketModeClient
+  // construction; they are read at start() time when the WebSocket is created.
+  // TypeScript marks them private but they're accessible at runtime.
+  // @ts-expect-error — clientPingTimeoutMS is private in TS but plain property in JS
+  receiver.client.clientPingTimeoutMS = 30000; // up from default 5000ms
+  // @ts-expect-error — serverPingTimeoutMS is private in TS but plain property in JS
+  receiver.client.serverPingTimeoutMS = 60000; // up from default 30000ms
+
+  // Log Socket Mode connection lifecycle so disconnects are visible in terminal.
+  receiver.client.on('connected', () => console.log('[SLACK] Socket Mode connected'));
+  receiver.client.on('connecting', () => console.log('[SLACK] Socket Mode connecting...'));
+  receiver.client.on('reconnecting', () => console.warn('[SLACK] Socket Mode reconnecting — events may be delayed'));
+  receiver.client.on('disconnected', () => console.warn('[SLACK] Socket Mode disconnected — will attempt reconnect'));
+
   const app = new App({
     token: botToken,
-    appToken,
-    socketMode: true,
+    receiver,
     logLevel: LogLevel.WARN,
   });
 
