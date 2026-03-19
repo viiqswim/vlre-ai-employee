@@ -39,68 +39,80 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
   if (!kbChannelId) { console.warn('[KB-ASSISTANT] SLACK_KB_CHANNEL_ID not set — KB assistant disabled'); return; }
 
   app.event('app_mention', async ({ event, client }) => {
-    console.log('[KB-ASSISTANT] app_mention received — channel: ' + event.channel + ' (expected: ' + kbChannelId + ')');
-    if (event.channel !== kbChannelId) {
-      console.warn('[KB-ASSISTANT] Ignoring event from channel ' + event.channel + ' — not the KB channel (' + kbChannelId + '). Check SLACK_KB_CHANNEL_ID in .env');
-      return;
-    }
-    if ('bot_id' in event && event.bot_id) return;
-    const question = stripMention(event.text);
-    if (!question) return;
-    console.log('[KB-ASSISTANT] Question: "' + question.substring(0, 60) + '..." in channel ' + event.channel);
-
-    let thinkingTs: string | undefined;
+    console.log('[KB-ASSISTANT] Handler start for event ' + event.ts);
     try {
-      const thinkingMsg = await client.chat.postMessage({
-        channel: event.channel,
-        thread_ts: event.ts,
-        text: '🔍 Searching the knowledge base...',
-      });
-      thinkingTs = typeof thinkingMsg.ts === 'string' ? thinkingMsg.ts : undefined;
-    } catch (e) {
-      console.warn('[KB-ASSISTANT] Failed to post thinking indicator:', e);
-    }
-
-    const postOrUpdate = async (blocks: KnownBlock[], text: string) => {
-      if (thinkingTs) {
-        await client.chat.update({ channel: event.channel, ts: thinkingTs, blocks, text });
-      } else {
-        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks, text });
+      console.log('[KB-ASSISTANT] app_mention received — channel: ' + event.channel + ' (expected: ' + kbChannelId + ')');
+      if (event.channel !== kbChannelId) {
+        console.warn('[KB-ASSISTANT] Ignoring event from channel ' + event.channel + ' — not the KB channel (' + kbChannelId + '). Check SLACK_KB_CHANNEL_ID in .env');
+        return;
       }
-    };
+      if ('bot_id' in event && event.bot_id) return;
+      const question = stripMention(event.text);
+      if (!question) return;
+      console.log('[KB-ASSISTANT] Question: "' + question.substring(0, 60) + '..." in channel ' + event.channel);
 
-    try {
-      const propertyMap = loadPropertyMap();
-      const detectedProperty = detectPropertyInQuestion(question, propertyMap) ?? undefined;
-      const kbContext = kbReader.search(question, detectedProperty);
-      const result = await askKBAssistant(question, kbContext);
+      let thinkingTs: string | undefined;
+      try {
+        const thinkingMsg = await client.chat.postMessage({
+          channel: event.channel,
+          thread_ts: event.ts,
+          text: '🔍 Searching the knowledge base...',
+        });
+        thinkingTs = typeof thinkingMsg.ts === 'string' ? thinkingMsg.ts : undefined;
+      } catch (e) {
+        console.warn('[KB-ASSISTANT] Failed to post thinking indicator:', e);
+      }
 
-      const filePath = resolveKBFilePath(question);
-      const searchedFiles: string[] = ['Common knowledge base'];
-      if (detectedProperty !== undefined) {
-        const pmEntry = propertyMap.properties.find((p) =>
-          p.names.some((n) => n === detectedProperty) || p.code === detectedProperty.toLowerCase()
-        );
-        if (pmEntry) {
-          searchedFiles.unshift(pmEntry.code.toUpperCase() + ' — ' + pmEntry.address);
+      const postOrUpdate = async (blocks: KnownBlock[], text: string) => {
+        if (thinkingTs) {
+          await client.chat.update({ channel: event.channel, ts: thinkingTs, blocks, text });
+        } else {
+          await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks, text });
+        }
+      };
+
+      try {
+        const propertyMap = loadPropertyMap();
+        const detectedProperty = detectPropertyInQuestion(question, propertyMap) ?? undefined;
+        const kbContext = kbReader.search(question, detectedProperty);
+        const result = await askKBAssistant(question, kbContext);
+
+        const filePath = resolveKBFilePath(question);
+        const searchedFiles: string[] = ['Common knowledge base'];
+        if (detectedProperty !== undefined) {
+          const pmEntry = propertyMap.properties.find((p) =>
+            p.names.some((n) => n === detectedProperty) || p.code === detectedProperty.toLowerCase()
+          );
+          if (pmEntry) {
+            searchedFiles.unshift(pmEntry.code.toUpperCase() + ' — ' + pmEntry.address);
+          }
+        }
+
+        if (result.found && result.answer) {
+          await postOrUpdate(buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', filePath), result.answer);
+          console.log('[KB-ASSISTANT] Answered: "' + question.substring(0, 60) + '..."');
+        } else {
+          await postOrUpdate(buildKBDontKnowBlocks(question, event.ts, searchedFiles), "I don't have this info in my knowledge base.");
+          console.log('[KB-ASSISTANT] Not found: "' + question.substring(0, 60) + '..."');
+        }
+      } catch (error) {
+        console.error('[KB-ASSISTANT] app_mention handler error:', error);
+        const errorText = "⚠️ Couldn't reach the AI — please try again.";
+        if (thinkingTs) {
+          try { await client.chat.update({ channel: event.channel, ts: thinkingTs, text: errorText }); } catch { /* ignore */ }
+        } else {
+          try { await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, text: errorText }); } catch { /* ignore */ }
         }
       }
-
-      if (result.found && result.answer) {
-        await postOrUpdate(buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', filePath), result.answer);
-        console.log('[KB-ASSISTANT] Answered: "' + question.substring(0, 60) + '..."');
-      } else {
-        await postOrUpdate(buildKBDontKnowBlocks(question, event.ts, searchedFiles), "I don't have this info in my knowledge base.");
-        console.log('[KB-ASSISTANT] Not found: "' + question.substring(0, 60) + '..."');
-      }
-    } catch (error) {
-      console.error('[KB-ASSISTANT] app_mention handler error:', error);
-      const errorText = "⚠️ Couldn't reach the AI — please try again.";
-      if (thinkingTs) {
-        try { await client.chat.update({ channel: event.channel, ts: thinkingTs, text: errorText }); } catch { /* ignore */ }
-      } else {
-        try { await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, text: errorText }); } catch { /* ignore */ }
-      }
+    } catch (outerError) {
+      console.error('[KB-ASSISTANT] UNHANDLED handler error for event ' + event.ts + ':', outerError);
+      try {
+        await client.chat.postMessage({
+          channel: event.channel,
+          thread_ts: event.ts,
+          text: '⚠️ Something went wrong — please try again.',
+        });
+      } catch { /* last resort — ignore */ }
     }
   });
 
