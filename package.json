@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "zx start.ts",
     "test": "bun test",
     "typecheck": "bun tsc --noEmit"
   },
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "@slack/bolt": "^4.6.0",
-    "@slack/types": "^2.20.1"
+    "@slack/types": "^2.20.1",
+    "zx": "^8.8.5"
   }
 }
