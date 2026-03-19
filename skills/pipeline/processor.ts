@@ -2,8 +2,9 @@ import type { App } from '@slack/bolt';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { KnowledgeBaseReader } from '../kb-reader/reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
-import { buildApprovalBlocks, buildErrorBlocks } from '../slack-blocks/blocks.ts';
+import { buildApprovalBlocks, buildErrorBlocks, buildSupersededBlocks } from '../slack-blocks/blocks.ts';
 import { withRetry } from './retry.js';
+import { appendAuditLog } from '../audit-logger/audit-logger.ts';
 
 export interface WebhookPayload {
   event_type: string;
@@ -384,6 +385,28 @@ export async function processWebhookMessage(
 
     const pending = threadTracker.getPending(thread_uid);
 
+    if (pending) {
+      try {
+        await slackApp.client.chat.update({
+          channel: pending.channelId,
+          ts: pending.slackTs,
+          blocks: buildSupersededBlocks(),
+          text: '⏭️ Superseded — a newer message from this guest is pending review below.',
+        });
+        await appendAuditLog({
+          action: 'supersede',
+          threadUid: thread_uid,
+          oldSlackTs: pending.slackTs,
+          oldMessageUid: pending.messageUid ?? null,
+          newMessageUid: message_uid,
+        });
+        console.log(`[PIPELINE] Superseded previous approval block for thread ${thread_uid}`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn(`[PIPELINE] Failed to supersede previous approval block (non-blocking): ${msg}`);
+      }
+    }
+
     const postResult = await slackApp.client.chat.postMessage({
       channel: slackChannelId,
       blocks,
@@ -391,7 +414,7 @@ export async function processWebhookMessage(
       ...(pending ? { thread_ts: pending.slackTs } : {}),
     });
 
-    if (postResult.ts && !pending) {
+    if (postResult.ts) {
       threadTracker.track(thread_uid, postResult.ts, slackChannelId, message_uid);
     }
 

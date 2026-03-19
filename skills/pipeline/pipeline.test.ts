@@ -22,6 +22,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     client: {
       chat: {
         postMessage: mock(() => Promise.resolve({ ok: true, ts: '1234567890.000001' })),
+        update: mock(() => Promise.resolve({ ok: true })),
       },
     },
   } as unknown as App;
@@ -212,7 +213,7 @@ test('posts as thread reply when pending thread exists', async () => {
 
   const context = makeContext({
     threadTracker: {
-      getPending: mock(() => ({ slackTs: '9999999999.000001', channelId: 'C0TEST' })),
+      getPending: mock(() => ({ slackTs: '9999999999.000001', channelId: 'C0TEST', messageUid: 'msg-old' })),
       track: mock(() => {}),
       clear: mock(() => {}),
     } as unknown as SlackThreadTracker,
@@ -226,8 +227,218 @@ test('posts as thread reply when pending thread exists', async () => {
   const callArgs = postCalls[0]?.[0] as { thread_ts?: string };
   expect(callArgs?.thread_ts).toBe('9999999999.000001');
 
+  const updateCalls = (context.slackApp.client.chat.update as ReturnType<typeof mock>).mock.calls;
+  expect(updateCalls.length).toBe(1);
+  const updateArgs = updateCalls[0]?.[0] as { channel: string; ts: string };
+  expect(updateArgs?.channel).toBe('C0TEST');
+  expect(updateArgs?.ts).toBe('9999999999.000001');
+
   const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
-  expect(trackCalls.length).toBe(0);
+  expect(trackCalls.length).toBe(1);
+
+  delete process.env['CLAUDE_MODE'];
+  delete process.env['CLAUDE_PROXY_URL'];
+});
+
+test('supersedes old approval block when pending exists', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  classification: 'NEEDS_APPROVAL',
+                  confidence: 0.8,
+                  reasoning: 'follow-up',
+                  draftResponse: 'Here is more info.',
+                  summary: 'Follow-up question',
+                  category: 'other',
+                  conversationSummary: null,
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response)
+  ) as unknown as typeof global.fetch;
+
+  process.env['CLAUDE_MODE'] = 'proxy';
+  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+  const context = makeContext({
+    threadTracker: {
+      getPending: mock(() => ({ slackTs: '9999999999.000001', channelId: 'C0TEST', messageUid: 'msg-old' })),
+      track: mock(() => {}),
+      clear: mock(() => {}),
+    } as unknown as SlackThreadTracker,
+  });
+
+  await processWebhookMessage(makePayload(), context);
+
+  const updateCalls = (context.slackApp.client.chat.update as ReturnType<typeof mock>).mock.calls;
+  expect(updateCalls.length).toBe(1);
+  const updateArgs = updateCalls[0]?.[0] as { channel: string; ts: string; blocks: unknown[] };
+  expect(updateArgs?.channel).toBe('C0TEST');
+  expect(updateArgs?.ts).toBe('9999999999.000001');
+  expect(Array.isArray(updateArgs?.blocks)).toBe(true);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
+  expect(trackCalls.length).toBe(1);
+  expect(trackCalls[0]?.[0]).toBe('thread-001');
+  expect(trackCalls[0]?.[3]).toBe('msg-001');
+
+  delete process.env['CLAUDE_MODE'];
+  delete process.env['CLAUDE_PROXY_URL'];
+});
+
+test('continues posting new block when chat.update fails', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  classification: 'NEEDS_APPROVAL',
+                  confidence: 0.8,
+                  reasoning: 'follow-up',
+                  draftResponse: 'Here is more info.',
+                  summary: 'Follow-up question',
+                  category: 'other',
+                  conversationSummary: null,
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response)
+  ) as unknown as typeof global.fetch;
+
+  process.env['CLAUDE_MODE'] = 'proxy';
+  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+  const context = makeContext({
+    slackApp: {
+      client: {
+        chat: {
+          postMessage: mock(() => Promise.resolve({ ok: true, ts: '1234567890.000001' })),
+          update: mock(() => Promise.reject(new Error('message_not_found'))),
+        },
+      },
+    } as unknown as App,
+    threadTracker: {
+      getPending: mock(() => ({ slackTs: '9999999999.000001', channelId: 'C0TEST', messageUid: 'msg-old' })),
+      track: mock(() => {}),
+      clear: mock(() => {}),
+    } as unknown as SlackThreadTracker,
+  });
+
+  await processWebhookMessage(makePayload(), context);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  delete process.env['CLAUDE_MODE'];
+  delete process.env['CLAUDE_PROXY_URL'];
+});
+
+test('does not call chat.update when no pending exists', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  classification: 'NEEDS_APPROVAL',
+                  confidence: 0.9,
+                  reasoning: 'first message',
+                  draftResponse: 'Welcome!',
+                  summary: 'First message',
+                  category: 'other',
+                  conversationSummary: null,
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response)
+  ) as unknown as typeof global.fetch;
+
+  process.env['CLAUDE_MODE'] = 'proxy';
+  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+  const context = makeContext();
+
+  await processWebhookMessage(makePayload(), context);
+
+  const updateCalls = (context.slackApp.client.chat.update as ReturnType<typeof mock>).mock.calls;
+  expect(updateCalls.length).toBe(0);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
+  expect(trackCalls.length).toBe(1);
+
+  delete process.env['CLAUDE_MODE'];
+  delete process.env['CLAUDE_PROXY_URL'];
+});
+
+test('calls track() with messageUid on every successful post', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  classification: 'NEEDS_APPROVAL',
+                  confidence: 0.8,
+                  reasoning: 'follow-up',
+                  draftResponse: 'Here is more info.',
+                  summary: 'Follow-up',
+                  category: 'other',
+                  conversationSummary: null,
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response)
+  ) as unknown as typeof global.fetch;
+
+  process.env['CLAUDE_MODE'] = 'proxy';
+  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+  const context = makeContext({
+    threadTracker: {
+      getPending: mock(() => ({ slackTs: '9999999999.000001', channelId: 'C0TEST', messageUid: 'msg-old' })),
+      track: mock(() => {}),
+      clear: mock(() => {}),
+    } as unknown as SlackThreadTracker,
+  });
+
+  await processWebhookMessage(makePayload(), context);
+
+  const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
+  expect(trackCalls.length).toBe(1);
+  expect(trackCalls[0]?.[0]).toBe('thread-001');
+  expect(trackCalls[0]?.[1]).toBe('1234567890.000001');
+  expect(trackCalls[0]?.[2]).toBe('C0TEST');
+  expect(trackCalls[0]?.[3]).toBe('msg-001');
 
   delete process.env['CLAUDE_MODE'];
   delete process.env['CLAUDE_PROXY_URL'];
