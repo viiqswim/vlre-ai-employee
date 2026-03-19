@@ -6,7 +6,7 @@
 ## General Policies
 
 
-- **Check-in Time**: 3:00 PM (15:00)
+- **Check-in Time**: 3:00 PM (15:00) standard — some properties have different times (see property-specific KB)
 - **Check-out Time**: 11:00 AM (11:00)
 - **Quiet Hours**: 10:00 PM – 8:00 AM
 - **Smoking**: Strictly prohibited inside all properties
@@ -53,25 +53,23 @@ Let us know if you have any other questions!
 ### Late Check out
 **How to verify**: Not possible, but if the next reservation is for separate rooms they can stay in the living room
 **Response**:
-Hey there! We're so sorry, but today might not be a good day for early check in since the cleaning team seems to be on a very tight schedule today :(
+Hey there! Unfortunately, we are not able to accommodate late check-out today as we have another guest arriving and our cleaning team needs time to prepare the property.
 
-We will reach out to them and ask them to let us know if they can get to it any earlier.
+Our standard check-out time is 11:00 AM. Please make sure to leave the property by that time, leaving the doors locked. If you need to store your luggage briefly, please let us know and we can try to help.
 
 Let us know if you have any other questions!
 
 ### Places near
 **How to verify**: NEIBORHOODS                                     NUTRIA RUN " Vista Point"   BRECKENBRIGE, SAND DUNES, HOVEWEEP "Colorado Crossings"
 **Response**:
-Hello there! If you need check anything that's around the property you can look up the "NAME OF NEIBORHOOD" neighborhood on an online map such as Google.  Let us know if you have any other questions.  Cheers
+Hello there! If you need check anything that's around the property you can look up the property's neighborhood on Google Maps.  Let us know if you have any other questions.  Cheers
 
 ### Pets
 **How to verify**: POSSIBLE ANSWER: "Hey there, Stephanie! Thanks for reaching out. We truly love pets. With that said, we cannot allow pets in the home because guests with bad allergies expect the home to be completely pet-free."
 **Response**:
-Soporte emocional❌
+Hey there! Thanks for reaching out. We truly love pets. With that said, we cannot allow pets or emotional support animals in the home because guests with bad allergies expect the property to be completely pet-free.
 
-Mascota ❌
-
-Animal de servicio ✔️
+The only exception is service animals (not emotional support animals) as required by law. If you have a service animal, please let us know and we can assist you.
 
 ### Service Animals
 **How to verify**: Guest claims to have a service animal (not emotional support).
