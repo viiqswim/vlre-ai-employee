@@ -15,7 +15,7 @@ flowchart TD
     TF -->|forwards to :48901| WR[Webhook Receiver]
     WR -->|validate + dedup| PP[Pipeline Processor]
     PP -->|fetch message/lead/property| HF[Hostfully API]
-    PP -->|search| KB[knowledge-base.md]
+    PP -->|search| KB[knowledge-base/]
     PP -->|classify + draft| CL[Claude AI via proxy]
     PP -->|post approval| SL[Slack via Bolt]
     SL --> CS{CS Team}
@@ -130,13 +130,28 @@ You only need to re-register if the public URL changes — for example, if you m
 
 ## Knowledge Base
 
-`knowledge-base.md` in the project root is what the pipeline reads when drafting responses. Edit it directly to add:
+The pipeline uses a hierarchical multi-property knowledge base in `knowledge-base/`. Two files are loaded per guest message:
 
-- Property-specific info (WiFi passwords, parking instructions, check-in codes)
-- General policies (check-in time, pet policy, quiet hours)
-- Response templates for common questions
+- **`knowledge-base/common.md`** — Always loaded. Shared policies, common Q&A scenarios, property quick-reference table, and a service provider directory.
+- **`knowledge-base/properties/{code}.md`** — Loaded based on the guest's property. 16 files covering all VL Real Estate properties, each with WiFi credentials, amenities, house rules, fees, and per-unit details.
 
-The more complete this file is, the better the AI drafts will be. If Claude is drafting vague or generic responses, the knowledge base is usually the first place to look.
+The routing is done via `knowledge-base/property-map.json` — a JSON file mapping property names and addresses to their KB file. If the property isn't found, the pipeline falls back to `common.md` only.
+
+**To regenerate the KB** when source data (XLSX files) changes:
+
+```bash
+bun run scripts/convert-xlsx-to-kb.ts --source /Users/victordozal/Downloads/properties-info/
+```
+
+**To preview without writing files:**
+
+```bash
+bun run scripts/convert-xlsx-to-kb.ts --dry-run
+```
+
+The more complete the KB is, the better the AI drafts will be. See `knowledge-base/discrepancy-report.md` for known gaps.
+
+> **Note**: `knowledge-base.md` in the project root is the legacy single-file KB. It's kept for reference but is no longer used by the pipeline.
 
 ---
 
@@ -147,7 +162,7 @@ The service is built as a set of composable OpenClaw skills. Each skill is a sel
 | Skill | Description |
 |---|---|
 | `hostfully-client` | Hostfully API v3.2 client — fetches messages, leads, properties, and sends replies |
-| `kb-reader` | Knowledge base search — reads and queries `knowledge-base.md` for relevant context |
+| `kb-reader` | Knowledge base search — `MultiPropertyKBReader` loads `common.md` + property-specific KB per guest message |
 | `dedup` | Message deduplication — prevents the same message from being processed twice |
 | `slack-blocks` | Block Kit message builders — constructs the rich Slack approval messages |
 | `slack-bot` | Bolt app and approve/reject/edit handlers — manages the Slack interaction lifecycle |
@@ -260,7 +275,7 @@ This is Phase 1 of a larger digital employee. The goal is a system that handles 
 - Monitor guest messages via Hostfully webhook
 - AI classification and response drafting
 - Slack approval workflow (approve / reject / edit & send)
-- Local markdown knowledge base
+- Multi-property knowledge base (common + 16 per-property KBs, auto-routed by property name)
 - Persistent agent memory
 - JSONL audit logging
 
@@ -275,7 +290,6 @@ This is Phase 1 of a larger digital employee. The goal is a system that handles 
 - Daily Slack summary: messages handled, response times, auto-response rate
 
 **Phase 4 — Platform**
-- Multi-property routing with a separate knowledge base per property
 - Owner reporting with weekly occupancy and revenue summaries
 - Support for additional PMS platforms (Guesty, Hostaway, Lodgify)
 - Analytics dashboard

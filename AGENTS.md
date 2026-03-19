@@ -20,11 +20,12 @@ bun run start               # Full startup: Tailscale Funnel + Claude proxy + se
 ```
 src/                Main service (index.ts entry, webhook-receiver.ts, index.test.ts)
 skills/             8 OpenClaw skills (pipeline, hostfully-client, kb-reader, slack-bot, slack-blocks, dedup, thread-tracker, audit-logger)
-scripts/            Utilities (register-webhook.ts, simulate-webhook.ts, deregister-webhook.ts)
+scripts/            Utilities (register-webhook.ts, simulate-webhook.ts, deregister-webhook.ts, convert-xlsx-to-kb.ts, common-kb-builder.ts)
 docs/               Architecture and security documentation
 data/               Runtime persistence (dedup store, thread tracker)
 logs/               JSONL audit logs (append-only)
-knowledge-base.md   Property info, policies, response templates (edit directly)
+knowledge-base/     Multi-property knowledge base (see Knowledge Base System section below)
+knowledge-base.md   Legacy single-file KB — superseded by knowledge-base/ directory, kept for reference
 SOUL.md             OpenClaw agent persona (read-only)
 ```
 
@@ -124,10 +125,52 @@ bunx mmdc -i <file.md> -o /tmp/test.svg 2>&1
 # Expected: zero errors, exit code 0
 ```
 
+## Knowledge Base System
+
+The pipeline uses a hierarchical multi-property knowledge base. `MultiPropertyKBReader` (in `skills/kb-reader/`) loads two files per guest message:
+
+1. **`knowledge-base/common.md`** — Always loaded. Contains shared policies, 16 common guest Q&A scenarios, a property quick-reference table, and a service provider directory for maintenance escalation.
+2. **`knowledge-base/properties/{code}.md`** — Loaded based on the guest's property. One file per property group (16 total), each containing WiFi, amenities, house rules, fees, and per-unit details for multi-room properties.
+
+**Routing**: The pipeline reads the incoming message's `propertyName` from Hostfully and looks it up in `knowledge-base/property-map.json` (16 entries, supports partial matching). If no match is found it falls back to `common.md` only and logs a `[KB]` warning.
+
+**Property codes and their KB files:**
+| Code | Address | KB File |
+|---|---|---|
+| 7213-NUT | 7213 Nutria Run, Austin TX | `properties/7213-nut.md` |
+| 3412-SAN | 3412 Sand Dunes Ave, Austin TX | `properties/3412-san.md` |
+| 3420-HOV | 3420 Hovenweep Ave, Austin TX | `properties/3420-hov.md` |
+| 3401-BRE | 3401 Breckenridge Dr, Austin TX | `properties/3401-bre.md` |
+| 271-GIN | 271 Gina Dr, Kyle TX | `properties/271-gin.md` |
+| 3505-BAN | 3505 Banton Rd, Austin TX | `properties/3505-ban.md` |
+| 407-GEV | 407 S Gevers St, San Antonio TX | `properties/407-gev.md` |
+| 219-PAU | 219 Paul St, San Antonio TX | `properties/219-pau.md` |
+| 4403-HAY | 4403 Hayride Ln, Austin TX | `properties/4403-hay.md` |
+| 4405-HAY | 4405 Hayride Ln, Austin TX | `properties/4405-hay.md` |
+| 4410-HAY | 4410 Hayride Ln, Austin TX | `properties/4410-hay.md` |
+| 5306-KIN | 5306 King Charles Dr, Austin TX | `properties/5306-kin.md` |
+| 6002-PAL | 6002 Palm Cir, Austin TX | `properties/6002-pal.md` |
+| 6930-HER | 6930 Heron Flats, Converse TX | `properties/6930-her.md` |
+| 8039-CHE | 8039 Chestnut Cedar Dr, Converse TX | `properties/8039-che.md` |
+| 1602-BLU | 1602 Bluebird Dr, Bailey CO | `properties/1602-blu.md` |
+
+**Regenerating the KB** (run whenever source XLSX files change):
+```bash
+bun run scripts/convert-xlsx-to-kb.ts --source /Users/victordozal/Downloads/properties-info/
+```
+
+**Important**: `knowledge-base/common.md` has manual content improvements applied on top of what the script generates (improved Late Check-out response, English-only Q&A). Re-running the script will overwrite these. Either re-apply the fixes manually after regeneration, or update `scripts/common-kb-builder.ts` to apply them programmatically.
+
+**Source files**: `/Users/victordozal/Downloads/properties-info/` — 41 XLSX property templates + `common-situations.xlsx`
+
+**Discrepancies found during initial conversion** (see `knowledge-base/discrepancy-report.md`):
+- `271-GIN` — No HOME file exists; KB built from room files only
+- `1602-BLU` — Source XLSX has a different format (3 sheets instead of 7); KB is partial
+
 ## Do Not Modify
 
 - `SOUL.md` — OpenClaw agent persona (read-only)
-- `knowledge-base.md` — Edit carefully; it's operational data
+- `knowledge-base.md` — Legacy single-file KB, now superseded. Do not write to it from new code.
 - `.env` — Local secrets, never commit
 - `data/` — Runtime persistence (managed by app)
 - `logs/` — Audit logs (append-only, managed by app)
