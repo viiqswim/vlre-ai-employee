@@ -2,7 +2,7 @@ import type { App } from '@slack/bolt';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MultiPropertyKBReader, PropertyMap } from '../kb-reader/multi-reader.js';
-import { askKBAssistant, detectPropertyInQuestion } from './kb-answerer.js';
+import { askKBAssistant, detectPropertyInQuestion, formatKBEntry } from './kb-answerer.js';
 import { appendToKB, undoAppend } from './kb-writer.js';
 import { buildKBAnswerBlocks, buildKBDontKnowBlocks, buildKBAddAnswerModal, buildKBAddedConfirmBlocks, buildKBUndoneBlocks, buildKBConfirmedBlocks, buildKBCorrectedBlocks, buildKBCorrectionModal } from './kb-blocks.js';
 import { recordFeedback } from './kb-feedback.js';
@@ -128,24 +128,27 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
     catch (error) { console.error('[KB-ASSISTANT] kb_add_answer: failed to open modal:', error); }
   });
 
-  app.view('kb_add_answer_modal', async ({ ack, body, client, view }) => {
-    const answerText = (view.state.values['answer_block']?.['answer_input']?.value ?? '').trim();
-    if (!answerText) { await ack({ response_action: 'errors', errors: { answer_block: 'Please provide an answer before submitting.' } }); return; }
-    await ack();
-    const userId = body.user.id;
-    let question = '', channelId = kbChannelId, threadTs = '';
-    try { const m = JSON.parse(view.private_metadata) as { question?: string; channelId?: string; threadTs?: string }; question = m.question ?? ''; channelId = m.channelId ?? kbChannelId; threadTs = m.threadTs ?? ''; }
-    catch { console.error('[KB-ASSISTANT] kb_add_answer_modal: failed to parse private_metadata'); }
-    try {
-      const filePath = resolveKBFilePath(question);
-      const appendResult = await appendToKB(filePath, answerText);
-      await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, blocks: buildKBAddedConfirmBlocks(question, filePath, appendResult.appendedText), text: '\u2705 Added to knowledge base!' });
-      console.log('[KB-ASSISTANT] Answer added to ' + filePath + ' by ' + userId);
-    } catch (error) {
-      console.error('[KB-ASSISTANT] kb_add_answer_modal error:', error);
-      await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, text: '\u26a0\ufe0f Failed to save the answer. Please try again.' });
-    }
-  });
+   app.view('kb_add_answer_modal', async ({ ack, body, client, view }) => {
+     const answerText = (view.state.values['answer_block']?.['answer_input']?.value ?? '').trim();
+     if (!answerText) { await ack({ response_action: 'errors', errors: { answer_block: 'Please provide an answer before submitting.' } }); return; }
+     await ack();
+     const userId = body.user.id;
+     let question = '', channelId = kbChannelId, threadTs = '';
+     try { const m = JSON.parse(view.private_metadata) as { question?: string; channelId?: string; threadTs?: string }; question = m.question ?? ''; channelId = m.channelId ?? kbChannelId; threadTs = m.threadTs ?? ''; }
+     catch { console.error('[KB-ASSISTANT] kb_add_answer_modal: failed to parse private_metadata'); }
+     try {
+       const filePath = resolveKBFilePath(question);
+       const formattedEntry = await formatKBEntry(question, answerText);
+       const appendResult = await appendToKB(filePath, formattedEntry);
+       await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, blocks: buildKBAddedConfirmBlocks(question, filePath, appendResult.appendedText), text: '\u2705 Added to knowledge base!' });
+       console.log('[KB-ASSISTANT] Answer added to ' + filePath + ' by ' + userId);
+     } catch (error) {
+       console.error('[KB-ASSISTANT] kb_add_answer_modal error:', error);
+       try {
+         await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, text: '\u26a0\ufe0f Failed to save the answer. Please try again.' });
+       } catch { /* ignore */ }
+     }
+   });
 
   app.action('kb_undo_add', async ({ ack, body, client }) => {
     await ack();
@@ -211,42 +214,41 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
     console.log('[KB-ASSISTANT] Correction modal opened by ' + body.user.id);
   });
 
-  app.view('kb_correction_modal', async ({ ack, body, client, view }) => {
-    const correctionText = (view.state.values['correction_block']?.['correction_input']?.value ?? '').trim();
-    if (!correctionText) {
-      await ack({ response_action: 'errors', errors: { correction_block: 'Please provide a correction before submitting.' } });
-      return;
-    }
-    await ack();
-    const userId = body.user.id;
-    let question = '', originalAnswer = '', channelId = kbChannelId, messageTs = '', filePath = '';
-    try {
-      const m = JSON.parse(view.private_metadata) as { question?: string; originalAnswer?: string; channelId?: string; messageTs?: string; filePath?: string };
-      question = m.question ?? ''; originalAnswer = m.originalAnswer ?? ''; channelId = m.channelId ?? kbChannelId; messageTs = m.messageTs ?? ''; filePath = m.filePath ?? COMMON_KB_PATH;
-    } catch { console.error('[KB-ASSISTANT] kb_correction_modal: failed to parse private_metadata'); }
-    try {
-      const appendResult = await appendToKB(filePath, correctionText);
-      recordFeedback({ type: 'incorrect', question, aiAnswer: originalAnswer, correction: correctionText, filePath, userId }).catch((e) =>
-        console.error('[KB-ASSISTANT] kb_correction_modal: feedback write failed:', e)
-      );
-      if (channelId && messageTs) {
-        await client.chat.update({
-          channel: channelId,
-          ts: messageTs,
-          blocks: buildKBCorrectedBlocks(question, appendResult.appendedText, filePath, userId),
-          text: '✏️ Correction saved',
-        });
-      }
-      console.log('[KB-ASSISTANT] Correction saved to ' + filePath + ' by ' + userId);
-    } catch (error) {
-      console.error('[KB-ASSISTANT] kb_correction_modal error:', error);
-      if (channelId && messageTs) {
-        try {
-          await client.chat.postMessage({ channel: channelId, text: '⚠️ Failed to save the correction. Please try again.' });
-        } catch { /* ignore */ }
-      }
-    }
-  });
+   app.view('kb_correction_modal', async ({ ack, body, client, view }) => {
+     const correctionText = (view.state.values['correction_block']?.['correction_input']?.value ?? '').trim();
+     if (!correctionText) {
+       await ack({ response_action: 'errors', errors: { correction_block: 'Please provide a correction before submitting.' } });
+       return;
+     }
+     await ack();
+     const userId = body.user.id;
+     let question = '', originalAnswer = '', channelId = kbChannelId, messageTs = '', filePath = '';
+     try {
+       const m = JSON.parse(view.private_metadata) as { question?: string; originalAnswer?: string; channelId?: string; messageTs?: string; filePath?: string };
+       question = m.question ?? ''; originalAnswer = m.originalAnswer ?? ''; channelId = m.channelId ?? kbChannelId; messageTs = m.messageTs ?? ''; filePath = m.filePath ?? COMMON_KB_PATH;
+     } catch { console.error('[KB-ASSISTANT] kb_correction_modal: failed to parse private_metadata'); }
+     try {
+       const formattedEntry = await formatKBEntry(question, correctionText);
+       const appendResult = await appendToKB(filePath, formattedEntry);
+       recordFeedback({ type: 'incorrect', question, aiAnswer: originalAnswer, correction: correctionText, filePath, userId }).catch((e) =>
+         console.error('[KB-ASSISTANT] kb_correction_modal: feedback write failed:', e)
+       );
+       if (channelId && messageTs) {
+         await client.chat.update({
+           channel: channelId,
+           ts: messageTs,
+           blocks: buildKBCorrectedBlocks(question, appendResult.appendedText, filePath, userId),
+           text: '✏️ Correction saved',
+         });
+       }
+       console.log('[KB-ASSISTANT] Correction saved to ' + filePath + ' by ' + userId);
+     } catch (error) {
+       console.error('[KB-ASSISTANT] kb_correction_modal error:', error);
+       try {
+         await client.chat.postMessage({ channel: channelId, thread_ts: messageTs || undefined, text: '⚠️ Failed to save the correction. Please try again.' });
+       } catch { /* ignore */ }
+     }
+   });
 
   console.log('[KB-ASSISTANT] Handlers registered (app_mention, kb_add_answer, kb_add_answer_modal, kb_undo_add, kb_confirm_answer, kb_incorrect_answer, kb_correction_modal)');
 }
