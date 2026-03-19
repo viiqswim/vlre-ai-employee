@@ -10,9 +10,9 @@ This project uses OpenCode for AI-assisted development. `AGENTS.md` is the prima
 
 ```bash
 bun test                    # Run tests with bun:test
-bun run typecheck           # TypeScript type checking
+bun run typecheck           # TypeScript type checking (src/ and skills/ only — not scripts/)
 bun run scripts/simulate-webhook.ts  # Test pipeline with real Hostfully messages
-bun run start               # Full startup: Tailscale Funnel + Claude proxy + service
+bun run start               # Full startup: OpenClaw check → Tailscale Funnel → Claude proxy (if proxy mode) → service
 ```
 
 ## Project Structure

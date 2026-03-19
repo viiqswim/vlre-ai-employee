@@ -26,7 +26,7 @@ flowchart TD
 
 When a guest sends a message, Hostfully fires a webhook to the local receiver via Tailscale Funnel. The pipeline fetches the full message thread, lead details, and property info from the Hostfully API, then searches the local knowledge base for relevant context. That package goes to Claude, which classifies the message type and drafts a response. The draft gets posted to Slack as a Block Kit message. A CS team member reviews it and either approves it (sends immediately), rejects it (discards), or edits it before sending. Hostfully handles the actual delivery to the guest.
 
-The OpenClaw agent runs alongside the service, maintaining persistent memory in `MEMORY.md` and providing the skill execution runtime.
+The OpenClaw agent runs alongside the service, providing the skill execution runtime and maintaining persistent memory in `MEMORY.md` (created at runtime — doesn't pre-exist in the repo).
 
 ---
 
@@ -51,7 +51,11 @@ openclaw gateway start  # if not already running as daemon
 bun run start
 ```
 
-`bun run start` handles the full startup sequence via `start.ts`: it starts Tailscale Funnel to expose the local webhook port, starts the Claude proxy if you're in `proxy` mode, and starts the service.
+`bun run start` handles the full startup sequence via `start.ts`:
+1. Checks the OpenClaw gateway is running (warns if not — non-fatal)
+2. Starts Tailscale Funnel on `WEBHOOK_PORT` and extracts the public URL (skipped if Tailscale isn't installed)
+3. Starts the `claude-max-api` proxy on port 3456 — **only if** `CLAUDE_MODE=proxy` and the proxy isn't already running. Requires `claude-max-api` installed under Node 20.19.0 via asdf.
+4. Starts the main service via `bun run src/index.ts`
 
 ---
 
@@ -64,16 +68,19 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `BOT_NAME` | No | Display name used in logs and Slack messages. Default: `Papi Chulo` |
 | `HOSTFULLY_API_KEY` | Yes | Found in Hostfully → Agency Settings → API |
 | `HOSTFULLY_AGENCY_UID` | Yes | Your agency UID from Hostfully |
-| `HOSTFULLY_API_URL` | Yes | Base URL. Default: `https://api.hostfully.com/api/v3.2` |
+| `HOSTFULLY_API_URL` | No | Base URL. Default: `https://api.hostfully.com/api/v3.2` |
 | `CLAUDE_MODE` | Yes | `proxy` (Claude Max subscription, free) or `api` (Anthropic API key, pay-per-token) |
 | `CLAUDE_PROXY_URL` | If proxy | Claude proxy URL. Default: `http://127.0.0.1:3456` |
-| `CLAUDE_MODEL` | Yes | Claude model ID |
+| `CLAUDE_MODEL` | Yes | Claude model ID (e.g. `claude-sonnet-4-20250514`) |
 | `ANTHROPIC_API_KEY` | If api mode | Anthropic API key |
+| `CLAUDE_RETRY_ATTEMPTS` | No | Retry attempts on transient failures. Default: `2` |
+| `CLAUDE_TIMEOUT_MS` | No | Per-request timeout in milliseconds. Default: `30000` |
+| `CLAUDE_FALLBACK_TO_API` | No | Fall back to Anthropic API if proxy unreachable. Requires `ANTHROPIC_API_KEY`. Default: `false` |
 | `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |
 | `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |
-| `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `48901` |
-| `WEBHOOK_PUBLIC_URL` | Auto | Set automatically by `start.ts` from Tailscale Funnel — don't set this manually |
+| `WEBHOOK_PORT` | No | Local port for the webhook server. Default: `48901` |
+| `WEBHOOK_PUBLIC_URL` | No | Public webhook URL. Auto-set by `start.ts` from Tailscale Funnel. Set manually if not using Tailscale. |
 | `OPENCLAW_HOOKS_TOKEN` | Yes | 64-char hex token generated during OpenClaw onboarding |
 
 ---
