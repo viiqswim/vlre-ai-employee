@@ -12,7 +12,7 @@ This project uses OpenCode for AI-assisted development. `AGENTS.md` is the prima
 bun test                    # Run tests with bun:test
 bun run typecheck           # TypeScript type checking
 bun run scripts/simulate-webhook.ts  # Test pipeline with real Hostfully messages
-./start.sh                  # Full startup: Tailscale Funnel + Claude proxy + service
+bun run start               # Full startup: Tailscale Funnel + Claude proxy + service
 ```
 
 ## Project Structure
@@ -49,6 +49,7 @@ Default to Bun instead of Node.js, npm, or vite:
 - **ESM modules**: `"type": "module"` in package.json
 - **OpenClaw skill pattern**: each skill has `index.ts` + implementation file
 - **Docs naming**: `YYYY-MM-DD-HHMM-name.md` (timestamped, sortable)
+- **Shell scripts use zx**: All shell-type scripts use [Google zx](https://github.com/google/zx) with TypeScript — no plain bash. Shebang: `#!/usr/bin/env zx`. Run with `zx script-name.ts` or add to `package.json` scripts.
 
 ## Mermaid Diagram Guidelines
 

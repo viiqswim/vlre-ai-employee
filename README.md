@@ -48,10 +48,10 @@ cp .env.example .env
 # fill in credentials (see Configuration section)
 bun install
 openclaw gateway start  # if not already running as daemon
-./start.sh
+bun run start
 ```
 
-`./start.sh` handles the full startup sequence: it starts Tailscale Funnel to expose the local webhook port, starts the Claude proxy if you're in `proxy` mode, and starts the service.
+`bun run start` handles the full startup sequence via `start.ts`: it starts Tailscale Funnel to expose the local webhook port, starts the Claude proxy if you're in `proxy` mode, and starts the service.
 
 ---
 
@@ -73,7 +73,7 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |
 | `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `3001` |
-| `WEBHOOK_PUBLIC_URL` | Auto | Set automatically by `start.sh` from Tailscale Funnel — don't set this manually |
+| `WEBHOOK_PUBLIC_URL` | Auto | Set automatically by `start.ts` from Tailscale Funnel — don't set this manually |
 | `OPENCLAW_HOOKS_TOKEN` | Yes | 64-char hex token generated during OpenClaw onboarding |
 
 ---
@@ -234,6 +234,20 @@ bun test                    # Run tests
 bun run typecheck           # TypeScript type checking
 bun run scripts/simulate-webhook.ts  # Test pipeline with real messages
 ```
+
+### Shell Scripts
+
+All shell-type scripts in this project use [Google zx](https://github.com/google/zx) with TypeScript instead of plain bash. To create a new script:
+
+```typescript
+#!/usr/bin/env zx
+
+import { $ } from 'zx'
+
+await $`echo "Hello from zx"`
+```
+
+Run with `zx script-name.ts` or add a script entry to `package.json`.
 
 ---
 
