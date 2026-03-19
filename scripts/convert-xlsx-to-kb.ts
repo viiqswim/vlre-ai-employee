@@ -1,11 +1,17 @@
 #!/usr/bin/env bun
 /**
  * convert-xlsx-to-kb.ts
- * Converts a single XLSX property information template to a markdown knowledge base entry.
+ * Converts XLSX property information templates to markdown knowledge base entries.
  *
- * Usage:
+ * Single-file mode:
  *   bun run scripts/convert-xlsx-to-kb.ts --file <path.xlsx> [--dry-run]
+ *
+ * Batch mode (default when no --file):
+ *   bun run scripts/convert-xlsx-to-kb.ts --source /path/to/xlsx-dir/ [--dry-run]
  */
+
+import path from 'path';
+import { readdirSync, existsSync, mkdirSync } from 'fs';
 
 // SheetJS — use require() (CommonJS) for compatibility with Bun's current XLSX version
 const XLSX = require('xlsx');
@@ -61,6 +67,11 @@ interface FeeItem {
 
 interface CustomCodes {
   parking?: string;
+}
+
+interface ConvertResult {
+  markdown: string;
+  warnings: string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -513,26 +524,14 @@ function assembleMarkdown(
   return lines.join('\n');
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Single-file converter ────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const fileIndex = args.indexOf('--file');
-  const filePath = fileIndex !== -1 ? args[fileIndex + 1] ?? null : null;
-  const isDryRun = args.includes('--dry-run');
-  const isCommon = args.includes('--common');
-
-  if (!filePath && !isCommon) {
-    console.log('[CONVERT] No --file specified. Batch mode not yet implemented.');
-    process.exit(0);
-  }
-
-  if (!filePath) {
-    console.error('[CONVERT] --common mode not yet implemented.');
-    process.exit(1);
-  }
-
-  process.stderr.write(`[CONVERT] Reading: ${filePath}\n`);
+/**
+ * Convert a single XLSX property template to markdown.
+ * Returns the markdown string and any warnings encountered.
+ */
+function convertFile(filePath: string): ConvertResult {
+  const warnings: string[] = [];
 
   const wb = XLSX.readFile(filePath);
 
@@ -543,20 +542,396 @@ async function main(): Promise<void> {
   const feesSheet = wb.Sheets['fees'] as object | undefined;
   const codesSheet = wb.Sheets['custom-codes'] as object | undefined;
 
+  if (!settingsSheet) warnings.push('Missing sheet: property-settings');
+  if (!amenitiesSheet) warnings.push('Missing sheet: amenities');
+  if (!policiesSheet) warnings.push('Missing sheet: policiesrules');
+
   const settings = settingsSheet ? parsePropertySettings(settingsSheet) : {};
   const amenities = amenitiesSheet ? parseAmenities(amenitiesSheet) : {};
   const policies = policiesSheet ? parsePoliciesRules(policiesSheet) : { rules: [] };
   const fees = feesSheet ? parseFees(feesSheet) : [];
   const codes = codesSheet ? parseCustomCodes(codesSheet) : {};
 
+  if (!settings.internalName) {
+    warnings.push('No internal property name found in property-settings');
+  }
+
   const markdown = assembleMarkdown(settings, amenities, policies, fees, codes);
 
-  if (isDryRun) {
-    process.stdout.write(markdown + '\n');
+  return { markdown, warnings };
+}
+
+// ─── Batch mode — property grouping ──────────────────────────────────────────
+
+/**
+ * Lookup table: normalized filename (no extension, no prefix, no suffix) → group code.
+ * Built from the authoritative property grouping spec.
+ */
+const GROUP_MAP: Record<string, string> = {
+  // 7213-NUT group
+  '7213-nut-home': '7213-nut',
+  '7213-nut-1': '7213-nut',
+  '7213-nut-2': '7213-nut',
+  '7213-nut-3': '7213-nut',
+  '7213-nut-4': '7213-nut',
+  '7213-nut-5': '7213-nut',
+  // 3412-SAN group
+  '3412-san-home': '3412-san',
+  '3412-san-1': '3412-san',
+  '3412-san-2': '3412-san',
+  '3412-san-3': '3412-san',
+  '3412-san-4': '3412-san',
+  // 3420-HOV group
+  '3420-hov-home': '3420-hov',
+  '3420-hov-1': '3420-hov',
+  '3420-hov-2': '3420-hov',
+  '3420-hov-3': '3420-hov',
+  // 3401-BRE group
+  '3401-bre-home': '3401-bre',
+  '3401-bre-1': '3401-bre',
+  '3401-bre-2': '3401-bre',
+  '3401-bre-3': '3401-bre',
+  // 271-GIN group (no HOME file)
+  '271-gin-1': '271-gin',
+  '271-gin-2': '271-gin',
+  '271-gin-3': '271-gin',
+  '271-gin-4': '271-gin',
+  // 3505-BAN group
+  '3505-ban-home': '3505-ban',
+  '3505-ban-1': '3505-ban',
+  '3505-ban-2': '3505-ban',
+  '3505-ban-3': '3505-ban',
+  // 407-GEV group
+  '407-gev-home': '407-gev',
+  '407-gev-bundle': '407-gev',
+  '407-gev-loft': '407-gev',
+  // 219-PAU group
+  '219-pau-home': '219-pau',
+  // 4403-HAY group
+  '4403a-hay-home': '4403-hay',
+  '4403b-hay-home': '4403-hay',
+  '4403c-hay-home': '4403-hay',
+  // 4405-HAY group
+  '4405a-hay-home': '4405-hay',
+  // 4410-HAY group
+  '4410a-hay-home': '4410-hay',
+  '4410b-hay-home': '4410-hay',
+  // Single properties
+  '5306a-kin-home': '5306-kin',
+  '6002-pal-home': '6002-pal',
+  '6930-her-home': '6930-her',
+  '8039-che-home': '8039-che',
+  // 1602-BLU (from zip extract)
+  '1602-blu-home': '1602-blu',
+};
+
+/**
+ * Normalize a filename to a GROUP_MAP key.
+ * Strips path, extension, leading underscore, "Copy of " prefix,
+ * and "-property-information[-template]" suffixes.
+ */
+function getGroupCode(filename: string): string | null {
+  let name = path.basename(filename, '.xlsx').toLowerCase();
+  // Strip "copy of " prefix (possibly repeated)
+  name = name.replace(/^(copy of )+/i, '');
+  // Strip leading underscore
+  name = name.replace(/^_/, '');
+  // Strip common suffixes
+  name = name.replace(/-property-information-template$/, '');
+  name = name.replace(/-property-information$/, '');
+  return GROUP_MAP[name] ?? null;
+}
+
+// ─── Discrepancy report ───────────────────────────────────────────────────────
+
+function buildDiscrepancyReport(
+  processed: string[],
+  discrepancies: string[],
+  unmapped: string[],
+): string {
+  const lines = [
+    '# Knowledge Base Discrepancy Report',
+    '',
+    `> Generated: ${new Date().toISOString()}`,
+    `> Properties processed: ${processed.length}`,
+    `> Discrepancies found: ${discrepancies.length}`,
+    '',
+    '## Properties Processed',
+    '',
+    ...processed.map(p => `- ✅ ${p.toUpperCase()}`),
+    '',
+    '## Discrepancies',
+    '',
+  ];
+
+  if (discrepancies.length === 0) {
+    lines.push('No discrepancies found.');
   } else {
-    // Batch mode writes to file — for now, just print (Task 8 will handle file output)
-    process.stdout.write(markdown + '\n');
+    lines.push(...discrepancies);
   }
+
+  if (unmapped.length > 0) {
+    lines.push('', '## Unmapped Files (skipped)', '');
+    lines.push(...unmapped.map(f => `- ${path.basename(f)}`));
+  }
+
+  return lines.join('\n') + '\n';
+}
+
+// ─── Batch mode runner ────────────────────────────────────────────────────────
+
+async function runBatch(sourceDir: string, isDryRun: boolean): Promise<void> {
+  // Source directories to scan: the user-supplied dir + the extracted zip location
+  const SOURCE_DIRS = [sourceDir, '/tmp/zip-extract'];
+
+  // Collect all XLSX files from all source dirs
+  const allFiles: string[] = [];
+  for (const dir of SOURCE_DIRS) {
+    if (!existsSync(dir)) {
+      console.log(`[CONVERT] Skipping missing dir: ${dir}`);
+      continue;
+    }
+    const dirFiles = readdirSync(dir)
+      .filter(f => f.endsWith('.xlsx'))
+      .map(f => path.join(dir, f));
+    allFiles.push(...dirFiles);
+    console.log(`[CONVERT] Found ${dirFiles.length} XLSX file(s) in ${dir}`);
+  }
+
+  console.log(`[CONVERT] Total XLSX files found: ${allFiles.length}`);
+
+  // Group files by property code using the lookup table
+  const groups = new Map<string, string[]>();
+  const unmapped: string[] = [];
+
+  for (const file of allFiles) {
+    const code = getGroupCode(file);
+    if (!code) {
+      unmapped.push(file);
+      continue;
+    }
+    if (!groups.has(code)) groups.set(code, []);
+    groups.get(code)!.push(file);
+  }
+
+  console.log(`[CONVERT] Mapped to ${groups.size} property group(s). Unmapped: ${unmapped.length}`);
+  if (unmapped.length > 0) {
+    for (const f of unmapped) {
+      console.log(`[CONVERT]   (skip) ${path.basename(f)}`);
+    }
+  }
+
+  const discrepancies: string[] = [];
+  const processed: string[] = [];
+
+  // Ensure output directory exists
+  const outDir = 'knowledge-base/properties';
+  if (!isDryRun && !existsSync(outDir)) {
+    mkdirSync(outDir, { recursive: true });
+  }
+
+  // Process each property group
+  for (const [code, groupFiles] of groups.entries()) {
+    console.log(`\n[CONVERT] Processing ${code.toUpperCase()} (${groupFiles.length} file(s))...`);
+
+    // Sort: HOME first, then numbered/named units alphabetically
+    const sorted = [...groupFiles].sort((a, b) => {
+      const nameA = path.basename(a).toLowerCase().replace(/^_/, '').replace(/^copy of /i, '');
+      const nameB = path.basename(b).toLowerCase().replace(/^_/, '').replace(/^copy of /i, '');
+      const aIsHome = nameA.includes('-home');
+      const bIsHome = nameB.includes('-home');
+      if (aIsHome && !bIsHome) return -1;
+      if (!aIsHome && bIsHome) return 1;
+      return nameA.localeCompare(nameB);
+    });
+
+    // Check for HOME file — note if missing
+    const hasHome = sorted.some(f => {
+      const n = path.basename(f).toLowerCase().replace(/^_/, '').replace(/^copy of /i, '');
+      return n.includes('-home');
+    });
+
+    if (!hasHome) {
+      discrepancies.push(
+        `⚠️ **${code.toUpperCase()}**: No HOME file found — room files used as overview (no property-level settings).`,
+      );
+      console.log(`[CONVERT]   ⚠ No HOME file for ${code.toUpperCase()}`);
+    }
+
+    // Build merged markdown parts
+    const markdownParts: string[] = [];
+    const fileWarnings: string[] = [];
+
+    for (const file of sorted) {
+      const basename = path.basename(file);
+      const normalName = basename.toLowerCase().replace(/^_/, '').replace(/^copy of /i, '');
+      const isHome = normalName.includes('-home');
+
+      console.log(`[CONVERT]   → ${basename}${isHome ? ' (HOME)' : ''}`);
+
+      let result: ConvertResult;
+      try {
+        result = convertFile(file);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        discrepancies.push(`❌ **${basename}**: Failed to parse — ${msg}`);
+        console.log(`[CONVERT]   ✗ Parse error: ${msg}`);
+        continue;
+      }
+
+      if (result.warnings.length > 0) {
+        for (const w of result.warnings) {
+          fileWarnings.push(`⚠️ **${basename}**: ${w}`);
+        }
+      }
+
+      if (isHome || sorted.length === 1) {
+        // HOME file or only file: use as the main content
+        markdownParts.push(result.markdown);
+      } else {
+        // Room/unit file: add as a subsection under the HOME content
+        // Extract a unit label from the filename (last segment before suffix)
+        const nameForLabel = normalName
+          .replace(/-property-information-template$/, '')
+          .replace(/-property-information$/, '');
+        const segments = nameForLabel.split('-');
+        const unitLabel = segments[segments.length - 1]?.toUpperCase() ?? basename;
+
+        // Strip the H1 title line from the room markdown and add as subsection
+        const roomBody = result.markdown.replace(/^#[^\n]*\n/, '').trimStart();
+        const unitHeader = `\n---\n\n## Unit ${unitLabel}\n`;
+        markdownParts.push(unitHeader + roomBody);
+      }
+    }
+
+    // Accumulate per-file warnings into discrepancy list
+    discrepancies.push(...fileWarnings);
+
+    if (markdownParts.length === 0) {
+      discrepancies.push(`❌ **${code.toUpperCase()}**: No content generated — all files failed.`);
+      console.log(`[CONVERT]   ✗ No output generated for ${code.toUpperCase()}`);
+      continue;
+    }
+
+    const finalMarkdown = markdownParts.join('\n');
+    const outPath = `${outDir}/${code}.md`;
+
+    if (isDryRun) {
+      console.log(
+        `[DRY RUN] Would write: ${outPath} (${finalMarkdown.length} chars, ${markdownParts.length} section(s))`,
+      );
+    } else {
+      await Bun.write(outPath, finalMarkdown);
+      console.log(`[CONVERT] ✅ Written: ${outPath}`);
+    }
+
+    processed.push(code);
+  }
+
+  // Generate common.md via common-kb-builder
+  console.log('\n[CONVERT] Building common.md from common-situations.xlsx...');
+  const commonXlsxPath = path.join(sourceDir, 'common-situations.xlsx');
+
+  if (existsSync(commonXlsxPath)) {
+    try {
+      const { buildCommonKB } = await import('./common-kb-builder.ts');
+      const commonContent = buildCommonKB(commonXlsxPath, './knowledge-base.md');
+
+      if (isDryRun) {
+        console.log(
+          `[DRY RUN] Would write: knowledge-base/common.md (${commonContent.length} chars)`,
+        );
+      } else {
+        if (!existsSync('knowledge-base')) mkdirSync('knowledge-base', { recursive: true });
+        await Bun.write('knowledge-base/common.md', commonContent);
+        console.log('[CONVERT] ✅ Written: knowledge-base/common.md');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      discrepancies.push(`❌ **common.md**: Failed to build — ${msg}`);
+      console.log(`[CONVERT] ✗ common.md build failed: ${msg}`);
+    }
+  } else {
+    discrepancies.push(
+      `⚠️ **common.md**: common-situations.xlsx not found at ${commonXlsxPath} — skipped.`,
+    );
+    console.log(`[CONVERT] ⚠ common-situations.xlsx not found, skipping common.md`);
+  }
+
+  // Generate discrepancy report
+  const report = buildDiscrepancyReport(processed, discrepancies, unmapped);
+  const reportPath = 'knowledge-base/discrepancy-report.md';
+
+  if (isDryRun) {
+    console.log('\n[DRY RUN] Would write: knowledge-base/discrepancy-report.md');
+    console.log('─'.repeat(60));
+    console.log(report);
+  } else {
+    await Bun.write(reportPath, report);
+    console.log(`[CONVERT] ✅ Written: ${reportPath}`);
+  }
+
+  // Summary
+  console.log('\n' + '═'.repeat(60));
+  console.log(`[CONVERT] Done!`);
+  console.log(`[CONVERT]   Properties processed: ${processed.length}`);
+  console.log(`[CONVERT]   Discrepancies:        ${discrepancies.length}`);
+  console.log(`[CONVERT]   Unmapped files:       ${unmapped.length}`);
+
+  if (discrepancies.length > 0) {
+    console.log(`[CONVERT] See ${reportPath} for details.`);
+  }
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const fileIndex = args.indexOf('--file');
+  const filePath = fileIndex !== -1 ? (args[fileIndex + 1] ?? null) : null;
+  const isDryRun = args.includes('--dry-run');
+  const isCommon = args.includes('--common');
+
+  const sourceIndex = args.indexOf('--source');
+  const sourceDir =
+    sourceIndex !== -1
+      ? (args[sourceIndex + 1] ?? '/Users/victordozal/Downloads/properties-info/')
+      : '/Users/victordozal/Downloads/properties-info/';
+
+  // --common: build just common.md
+  if (isCommon && !filePath) {
+    const { buildCommonKB } = await import('./common-kb-builder.ts');
+    const commonContent = buildCommonKB(
+      path.join(sourceDir, 'common-situations.xlsx'),
+      './knowledge-base.md',
+    );
+    if (isDryRun) {
+      process.stdout.write(commonContent + '\n');
+    } else {
+      await Bun.write('knowledge-base/common.md', commonContent);
+      console.log('[CONVERT] Written: knowledge-base/common.md');
+    }
+    return;
+  }
+
+  // --file: single-file conversion mode (prints to stdout)
+  if (filePath) {
+    process.stderr.write(`[CONVERT] Reading: ${filePath}\n`);
+    const result = convertFile(filePath);
+    if (result.warnings.length > 0) {
+      for (const w of result.warnings) {
+        process.stderr.write(`[CONVERT] Warning: ${w}\n`);
+      }
+    }
+    process.stdout.write(result.markdown + '\n');
+    return;
+  }
+
+  // Default: batch mode
+  console.log(`[CONVERT] Batch mode — source: ${sourceDir}`);
+  if (isDryRun) console.log('[CONVERT] DRY RUN — no files will be written');
+
+  await runBatch(sourceDir, isDryRun);
 }
 
 main().catch((err: unknown) => {
