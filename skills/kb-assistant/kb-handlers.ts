@@ -33,7 +33,7 @@ function stripMention(text: string): string {
 }
 
 export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBReader): void {
-  const kbChannelId = process.env['SLACK_KB_CHANNEL_ID'] ?? '';
+  const kbChannelId = (process.env['SLACK_KB_CHANNEL_ID'] ?? '').trim().replace(/^[="']+|[="']+$/g, '');
   if (!kbChannelId) { console.warn('[KB-ASSISTANT] SLACK_KB_CHANNEL_ID not set — KB assistant disabled'); return; }
 
   app.event('app_mention', async ({ event, client }) => {

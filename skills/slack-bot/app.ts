@@ -17,15 +17,6 @@ export function createSlackApp(config: SlackBotConfig = {}): App {
     logLevel: LogLevel.WARN,
   });
 
-  // Temporary debug: log all incoming event types (troubleshooting app_mention)
-  app.use(async (args) => {
-    const body = args.body as { event?: { type?: string; channel?: string }; type?: string };
-    if (body.event?.type) {
-      console.log('[SLACK-DEBUG] event:', body.event.type, '| channel:', body.event.channel ?? 'N/A');
-    }
-    await args.next();
-  });
-
   app.message('ping', async ({ message, say }) => {
     if (message.subtype === undefined) {
       await say('pong 🏓 OpenClaw is online!');
