@@ -4,6 +4,7 @@ import { resolve, dirname } from "path";
 interface PendingThread {
   slackTs: string;
   channelId: string;
+  messageUid: string;
 }
 
 export class SlackThreadTracker {
@@ -26,7 +27,11 @@ export class SlackThreadTracker {
       const content = readFileSync(this.filePath, "utf-8");
       const data = JSON.parse(content) as Record<string, PendingThread>;
       for (const [key, value] of Object.entries(data)) {
-        this.threads.set(key, value);
+        this.threads.set(key, {
+          slackTs: value.slackTs,
+          channelId: value.channelId,
+          messageUid: value.messageUid ?? '',
+        });
       }
       console.log(`[THREADS] Loaded ${this.threads.size} pending thread(s)`);
     } catch (error) {
@@ -52,8 +57,8 @@ export class SlackThreadTracker {
     }
   }
 
-  track(hostfullyThreadUid: string, slackTs: string, channelId: string): void {
-    this.threads.set(hostfullyThreadUid, { slackTs, channelId });
+  track(hostfullyThreadUid: string, slackTs: string, channelId: string, messageUid: string): void {
+    this.threads.set(hostfullyThreadUid, { slackTs, channelId, messageUid });
     this.save();
   }
 

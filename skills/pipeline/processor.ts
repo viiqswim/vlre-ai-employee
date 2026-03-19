@@ -392,7 +392,7 @@ export async function processWebhookMessage(
     });
 
     if (postResult.ts && !pending) {
-      threadTracker.track(thread_uid, postResult.ts, slackChannelId);
+      threadTracker.track(thread_uid, postResult.ts, slackChannelId, message_uid);
     }
 
     console.log(`[PIPELINE] ✅ Posted approval message to Slack for ${guestName} at ${propertyName}`);
