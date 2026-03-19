@@ -18,21 +18,45 @@ RULES:
 - Use casual, friendly tone`;
 
 export async function askKBAssistant(question: string, kbContext: string): Promise<KBAnswerResult> {
+  const proxyUrl = process.env['CLAUDE_PROXY_URL'] ?? 'http://127.0.0.1:3456';
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   const model = process.env['CLAUDE_MODEL'] ?? 'claude-3-5-sonnet-20241022';
+  const mode = process.env['CLAUDE_MODE'] ?? (apiKey ? 'api' : 'proxy');
   const userMessage = '## Question\n' + question + '\n\n## Knowledge Base Context\n' + kbContext;
+
   try {
-    if (!apiKey) { console.warn('[KB-ASSISTANT] ANTHROPIC_API_KEY not set'); return { found: false, answer: null, source: null }; }
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 800, system: KB_ASSISTANT_PROMPT, messages: [{ role: 'user', content: userMessage }] }),
-    });
-    if (!response.ok) { console.error('[KB-ASSISTANT] API error: ' + response.status); return { found: false, answer: null, source: null }; }
-    const data = await response.json() as { content: Array<{ type: string; text: string }> };
-    const textContent = data.content?.find((c) => c.type === 'text');
-    if (!textContent?.text) return { found: false, answer: null, source: null };
-    return parseKBAnswer(textContent.text);
+    let responseText: string;
+
+    if (mode === 'proxy') {
+      const response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          max_tokens: 800,
+          messages: [
+            { role: 'system', content: KB_ASSISTANT_PROMPT },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      });
+      if (!response.ok) { console.error('[KB-ASSISTANT] Proxy error: ' + response.status); return { found: false, answer: null, source: null }; }
+      const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+      responseText = data.choices?.[0]?.message?.content ?? '';
+    } else {
+      if (!apiKey) { console.warn('[KB-ASSISTANT] ANTHROPIC_API_KEY not set'); return { found: false, answer: null, source: null }; }
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model, max_tokens: 800, system: KB_ASSISTANT_PROMPT, messages: [{ role: 'user', content: userMessage }] }),
+      });
+      if (!response.ok) { console.error('[KB-ASSISTANT] API error: ' + response.status); return { found: false, answer: null, source: null }; }
+      const data = await response.json() as { content: Array<{ type: string; text: string }> };
+      responseText = data.content?.find((c) => c.type === 'text')?.text ?? '';
+    }
+
+    if (!responseText) return { found: false, answer: null, source: null };
+    return parseKBAnswer(responseText);
   } catch (error) {
     console.error('[KB-ASSISTANT] askKBAssistant error:', error);
     return { found: false, answer: null, source: null };
