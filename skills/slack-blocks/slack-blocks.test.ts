@@ -234,6 +234,10 @@ test('buildEditModal returns modal view object', () => {
     threadUid: 'thread-456',
     leadUid: 'lead-789',
     messageUid: 'msg-123',
+    guestName: 'John Smith',
+    propertyName: 'Test Property',
+    checkInDate: '2026-03-20',
+    checkOutDate: '2026-03-25',
   }) as ModalView;
   
   expect(modal).toBeDefined();
@@ -252,6 +256,10 @@ test('buildEditModal includes initial_value with draftResponse', () => {
     threadUid: 'thread-456',
     leadUid: 'lead-789',
     messageUid: 'msg-123',
+    guestName: 'John Smith',
+    propertyName: 'Test Property',
+    checkInDate: '2026-03-20',
+    checkOutDate: '2026-03-25',
   }) as ModalView;
   
   const inputBlock = modal.blocks?.find(b => b.type === 'input');
@@ -372,6 +380,10 @@ test('buildEditModal private_metadata contains draftResponse', () => {
     threadUid: 'thread-456',
     leadUid: 'lead-789',
     messageUid: 'msg-123',
+    guestName: 'John Smith',
+    propertyName: 'Test Property',
+    checkInDate: '2026-03-20',
+    checkOutDate: '2026-03-25',
   }) as { private_metadata: string };
 
   expect(typeof modal.private_metadata).toBe('string');

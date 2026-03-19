@@ -29,6 +29,10 @@ interface ModalMetadata {
   leadUid: string;
   messageUid: string;
   draftResponse: string;
+  guestName: string;
+  propertyName: string;
+  checkInDate: string;
+  checkOutDate: string;
 }
 
 function parseMetadata(value: string): ButtonMetadata {
@@ -124,10 +128,18 @@ export function registerApproveHandler(
       });
 
       try {
+        const errorContext: PostActionContext = {
+          guestName: metadata.guestName ?? '',
+          propertyName: metadata.propertyName ?? '',
+          checkInDate: metadata.checkInDate ?? '',
+          checkOutDate: metadata.checkOutDate ?? '',
+          threadUid: metadata.threadUid,
+          leadUid: metadata.leadUid,
+        };
         await client.chat.update({
           channel: channelId,
           ts: messageTs,
-          blocks: buildErrorBlocks(errorMsg),
+          blocks: buildErrorBlocks(errorMsg, errorContext),
           text: `🚨 Send failed: ${errorMsg}`,
         });
       } catch (updateError) {
@@ -224,6 +236,10 @@ export function registerEditHandler(
           threadUid: metadata.threadUid,
           leadUid: metadata.leadUid,
           messageUid: metadata.messageUid,
+          guestName: metadata.guestName ?? '',
+          propertyName: metadata.propertyName ?? '',
+          checkInDate: metadata.checkInDate ?? '',
+          checkOutDate: metadata.checkOutDate ?? '',
         }) as Parameters<typeof client.views.open>[0]['view'],
       });
     } catch (error) {
@@ -254,10 +270,10 @@ export function registerEditHandler(
       threadTracker.clear(modalMetadata.threadUid);
 
       const context: PostActionContext = {
-        guestName: '',
-        propertyName: '',
-        checkInDate: '',
-        checkOutDate: '',
+        guestName: modalMetadata.guestName ?? '',
+        propertyName: modalMetadata.propertyName ?? '',
+        checkInDate: modalMetadata.checkInDate ?? '',
+        checkOutDate: modalMetadata.checkOutDate ?? '',
         threadUid: modalMetadata.threadUid,
         leadUid: modalMetadata.leadUid,
       };
@@ -292,10 +308,18 @@ export function registerEditHandler(
       });
 
       try {
+        const errorContext: PostActionContext = {
+          guestName: modalMetadata.guestName ?? '',
+          propertyName: modalMetadata.propertyName ?? '',
+          checkInDate: modalMetadata.checkInDate ?? '',
+          checkOutDate: modalMetadata.checkOutDate ?? '',
+          threadUid: modalMetadata.threadUid,
+          leadUid: modalMetadata.leadUid,
+        };
         await client.chat.update({
           channel: modalMetadata.channelId,
           ts: modalMetadata.messageTs,
-          blocks: buildErrorBlocks(errorMsg),
+          blocks: buildErrorBlocks(errorMsg, errorContext),
           text: `🚨 Send failed: ${errorMsg}`,
         });
       } catch (updateError) {

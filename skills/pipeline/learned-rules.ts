@@ -35,7 +35,8 @@ export function loadLearnedRules(filePath: string = 'data/learned-rules.json'): 
     const data = JSON.parse(content) as LearnedRulesFile;
     if (!Array.isArray(data.rules)) return [];
     return data.rules.filter((r) => r.status === 'confirmed');
-  } catch {
+  } catch (error) {
+    console.warn('[PIPELINE] Failed to load learned-rules.json — running with no learned rules:', error);
     return [];
   }
 }

@@ -353,6 +353,10 @@ export function buildEditModal(params: {
   threadUid: string;
   leadUid: string;
   messageUid: string;
+  guestName: string;
+  propertyName: string;
+  checkInDate: string;
+  checkOutDate: string;
 }): object {
   const privateMetadata = JSON.stringify({
     channelId: params.channelId,
@@ -361,6 +365,10 @@ export function buildEditModal(params: {
     leadUid: params.leadUid,
     messageUid: params.messageUid,
     draftResponse: params.draftResponse.substring(0, 1000),
+    guestName: params.guestName,
+    propertyName: params.propertyName,
+    checkInDate: params.checkInDate,
+    checkOutDate: params.checkOutDate,
   });
 
   return {
