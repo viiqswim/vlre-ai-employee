@@ -1,6 +1,7 @@
 #!/usr/bin/env zx
 
 import { $, cd } from 'zx'
+import { spawn } from 'node:child_process'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,5 +132,18 @@ if (process.env['CLAUDE_MODE'] === 'proxy') {
 }
 
 // Start Papi Chulo main process (foreground — blocks until Ctrl+C)
+// Use spawn with stdio:'inherit' so Bun writes directly to the terminal.
+// Without this, Bun detects stdout is a pipe (not a TTY) and buffers output,
+// making the terminal look frozen even though the service is running fine.
 console.log(`Starting ${BOT_NAME} main process...`)
-await $`bun run src/index.ts`
+await new Promise<void>((resolve, reject) => {
+  const child = spawn('bun', ['run', 'src/index.ts'], {
+    stdio: 'inherit',
+    env: process.env,
+  })
+  child.on('error', reject)
+  child.on('exit', (code) => {
+    if (code !== 0 && code !== null) reject(new Error(`${BOT_NAME} exited with code ${code}`))
+    else resolve()
+  })
+})
