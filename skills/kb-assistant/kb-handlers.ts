@@ -52,10 +52,10 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
       const kbContext = kbReader.search(question, detectedProperty);
       const result = await askKBAssistant(question, kbContext);
       if (result.found && result.answer) {
-        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks: buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base'), text: result.answer });
+        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks: buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', resolveKBFilePath(question)), text: result.answer });
         console.log('[KB-ASSISTANT] Answered: "' + question.substring(0, 60) + '..."');
       } else {
-        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks: buildKBDontKnowBlocks(question, event.ts), text: "I don't have this info in my knowledge base." });
+        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks: buildKBDontKnowBlocks(question, event.ts, []), text: "I don't have this info in my knowledge base." });
         console.log('[KB-ASSISTANT] Not found: "' + question.substring(0, 60) + '..."');
       }
     } catch (error) { console.error('[KB-ASSISTANT] app_mention handler error:', error); }
