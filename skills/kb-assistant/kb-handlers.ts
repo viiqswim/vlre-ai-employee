@@ -63,12 +63,11 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
         console.warn('[KB-ASSISTANT] Failed to post thinking indicator:', e);
       }
 
-      const postOrUpdate = async (blocks: KnownBlock[], text: string) => {
+      const postResponse = async (blocks: KnownBlock[], text: string) => {
         if (thinkingTs) {
-          await client.chat.update({ channel: event.channel, ts: thinkingTs, blocks, text });
-        } else {
-          await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks, text });
+          try { await client.chat.delete({ channel: event.channel, ts: thinkingTs }); } catch { /* ignore — still post response */ }
         }
+        await client.chat.postMessage({ channel: event.channel, thread_ts: event.ts, blocks, text });
       };
 
       try {
@@ -89,10 +88,10 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
         }
 
         if (result.found && result.answer) {
-          await postOrUpdate(buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', filePath), result.answer);
+          await postResponse(buildKBAnswerBlocks(question, result.answer, result.source ?? 'Knowledge Base', filePath), result.answer);
           console.log('[KB-ASSISTANT] Answered: "' + question.substring(0, 60) + '..."');
         } else {
-          await postOrUpdate(buildKBDontKnowBlocks(question, event.ts, searchedFiles), "I don't have this info in my knowledge base.");
+          await postResponse(buildKBDontKnowBlocks(question, event.ts, searchedFiles), "I don't have this info in my knowledge base.");
           console.log('[KB-ASSISTANT] Not found: "' + question.substring(0, 60) + '..."');
         }
       } catch (error) {
