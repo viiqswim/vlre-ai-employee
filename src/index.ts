@@ -1,6 +1,7 @@
 import { createSlackApp, startSlackApp, stopSlackApp } from '../skills/slack-bot/app.ts';
 import { registerAllHandlers } from '../skills/slack-bot/handlers.ts';
 import { startScheduler, stopScheduler, checkMissedRun } from '../skills/slack-bot/scheduler.js';
+import { registerKBAssistantHandlers } from '../skills/kb-assistant/index.js';
 import { createHostfullyClient } from '../skills/hostfully-client/index.ts';
 import { createMultiPropertyKBReader } from '../skills/kb-reader/index.ts';
 import { createThreadTracker } from '../skills/thread-tracker/index.ts';
@@ -22,6 +23,7 @@ async function main(): Promise<void> {
 
   const slackApp = createSlackApp();
   registerAllHandlers(slackApp, hostfullyClient, threadTracker);
+  registerKBAssistantHandlers(slackApp, kbReader);
   await startSlackApp(slackApp);
 
   const slackChannelId = process.env['SLACK_CHANNEL_ID'] ?? '';
