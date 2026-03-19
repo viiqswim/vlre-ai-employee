@@ -1,5 +1,6 @@
 import { createSlackApp, startSlackApp, stopSlackApp } from '../skills/slack-bot/app.ts';
 import { registerAllHandlers } from '../skills/slack-bot/handlers.ts';
+import { startScheduler, stopScheduler, checkMissedRun } from '../skills/slack-bot/scheduler.js';
 import { createHostfullyClient } from '../skills/hostfully-client/index.ts';
 import { createMultiPropertyKBReader } from '../skills/kb-reader/index.ts';
 import { createThreadTracker } from '../skills/thread-tracker/index.ts';
@@ -24,6 +25,9 @@ async function main(): Promise<void> {
   await startSlackApp(slackApp);
 
   const slackChannelId = process.env['SLACK_CHANNEL_ID'] ?? '';
+  startScheduler(slackApp, slackChannelId);
+  await checkMissedRun(slackApp, slackChannelId);
+
   const pipelineContext = { hostfullyClient, kbReader, slackApp, slackChannelId, threadTracker };
 
   startWebhookReceiver((payload) => processWebhookMessage(payload, pipelineContext));
@@ -32,6 +36,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     console.log(`\n[${BOT_NAME}] ${signal} received — shutting down gracefully`);
+    stopScheduler();
     await stopSlackApp(slackApp);
     process.exit(0);
   };
