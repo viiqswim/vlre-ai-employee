@@ -16,57 +16,57 @@
 ### WiFi / Access
 
 **Template 1 — WiFi Password Request:**
-Hi [Guest Name]! Great question. For [Property Name], the WiFi network is "[WIFI_NETWORK]" and the password is "[WIFI_PASSWORD]". You should be able to connect right away once you check in. Let us know if you have any trouble! 😊
+Hey [Guest Name]! For [Property Name], the WiFi network is "[WIFI_NETWORK]" and the password is "[WIFI_PASSWORD]". You should be good to connect right away. Let us know if you have any trouble! 😊
 
 **Template 2 — Smart Lock / Door Code:**
-Hi [Guest Name]! Your door access code for [Property Name] is "[DOOR_CODE]". This code will be active starting at your check-in time (3 PM). Simply enter the code on the keypad and the door will unlock. If you have any issues, please don't hesitate to reach out!
+Hey [Guest Name]! Your door access code for [Property Name] is "[DOOR_CODE]". It'll be active starting at check-in time (3 PM) — just enter it on the keypad. If you have any issues, let us know!
 
 **Template 3 — General Access Question:**
-Hi [Guest Name]! You'll find complete access instructions in your booking confirmation and in the digital welcome guide inside the property. Your access code is sent automatically 24 hours before check-in. If you haven't received it, please let us know and we'll resend it immediately.
+Hey [Guest Name]! Complete access instructions are in your booking confirmation and the digital welcome guide at the property. Your access code gets sent automatically 24 hours before check-in. If you haven't gotten it yet, just let us know and we'll resend it!
 
 ### Early Check-in / Late Check-out
 
 **Template 1 — Early Check-in Request (uncertain availability):**
-Hi [Guest Name]! We'd love to accommodate your early check-in request. Our standard check-in is 3:00 PM, but we'll check with our cleaning team to see if the property is ready earlier. I'll update you by noon on your arrival day. Please note that early check-in (before 3 PM) is subject to a $50 fee and availability. Thank you for your flexibility!
+Hey [Guest Name]! Check-in is usually 3 PM, but we'll check if it's ready earlier and let you know by noon. If we can swing it, early check-in is $50. We'll keep you posted!
 
 **Template 2 — Early Check-in (confirmed available):**
-Hi [Guest Name]! Great news — the property will be ready for you at [TIME]! You're all set to check in early. Enjoy your stay!
+Hey [Guest Name]! Great news — it'll be ready for you at [TIME]! You're all set for early check-in. Enjoy your stay!
 
 **Template 3 — Late Check-out Request:**
-Hi [Guest Name]! We can check on late check-out availability for you. Our standard check-out is 11:00 AM. A late check-out until [TIME] can be arranged for $50, subject to availability (we have back-to-back bookings to coordinate). I'll confirm within a few hours!
+Hey [Guest Name]! Standard check-out is 11 AM. We can check if late check-out until [TIME] is possible — it's $50 and depends on availability (back-to-back bookings). I'll confirm within a few hours!
 
 **Template 4 — Late Check-out Denial (back-to-back):**
-Hi [Guest Name]! Unfortunately we're unable to accommodate a late check-out as we have guests arriving later today and our cleaning team needs time to prepare. We hope you understand! The standard check-out is 11:00 AM. Safe travels!
+Hey [Guest Name]! Unfortunately we can't do late check-out today — we've got guests arriving and the cleaning team needs time to turn the place around. Standard check-out is 11 AM. Have a great trip!
 
 ### Amenity Questions
 
 **Template 1 — Parking Question:**
-Hi [Guest Name]! [Property Name] has [PARKING_DETAILS]. Parking is [free/included/available for a fee]. [Any additional parking notes]. Let me know if you need any additional information!
+Hey [Guest Name]! [Property Name] has [PARKING_DETAILS]. Parking is [free/included/available for a fee]. [Any additional parking notes]. Let me know if you need anything else!
 
 **Template 2 — Pool/Hot Tub:**
-Hi [Guest Name]! [Property Name] [does/does not] have a pool/hot tub. [If yes: The pool/hot tub is available 24 hours and the temperature is set to [TEMP]°F. Please follow the posted pool rules.] Let us know if you have questions!
+Hey [Guest Name]! [Property Name] [does/does not] have a pool/hot tub. [If yes: It's available 24 hours and set to [TEMP]°F. Please follow the posted pool rules.] Let us know if you have questions!
 
 **Template 3 — Appliance/Kitchen Question:**
-Hi [Guest Name]! The kitchen at [Property Name] is fully equipped with [LIST_APPLIANCES]. There's [STORAGE_DETAILS] for your groceries. Feel free to use everything — just give us a heads up if anything isn't working properly!
+Hey [Guest Name]! The kitchen at [Property Name] is fully equipped with [LIST_APPLIANCES]. There's [STORAGE_DETAILS] for your groceries. Help yourself to everything — just let us know if anything isn't working!
 
 ### Maintenance Requests
 
 **Template 1 — Routine Maintenance Acknowledgment:**
-Hi [Guest Name]! Thank you for letting us know about the [ISSUE]. We've logged this and will have our maintenance team address it as soon as possible. We want to make sure your stay is comfortable. Can you tell us a bit more about where exactly this is happening so we can assist faster?
+Hey [Guest Name]! Sorry about the [ISSUE] — we're on it. Can you tell us exactly where it's happening so we can get someone there faster?
 
 **Template 2 — AC/Heat Issue:**
-Hi [Guest Name]! Sorry to hear you're having trouble with the [AC/heater]. Please try the following: [TROUBLESHOOTING_STEPS]. If the issue persists, please let us know immediately and we'll dispatch someone right away. Your comfort is our priority!
+Hey [Guest Name]! Sorry about the [AC/heater] issue. Try this first: [TROUBLESHOOTING_STEPS]. If it's still not working, let us know right away and we'll get someone out there!
 
 **Template 3 — Plumbing Issue:**
-Hi [Guest Name]! We're sorry about the [plumbing issue]. This is being escalated to our maintenance team right away. Someone will be in touch with you within [TIME_FRAME] to resolve this. Thank you for your patience!
+Hey [Guest Name]! Sorry about the [plumbing issue] — we're escalating to maintenance right now. Someone will reach out within [TIME_FRAME] to get it sorted. Thanks for the heads-up!
 
 ### Noise / Neighbor Complaints
 
 **Template 1 — Noise Reminder (preemptive or after complaint):**
-Hi [Guest Name]! Just a friendly reminder that our properties observe quiet hours from 10:00 PM to 8:00 AM out of respect for neighbors and other guests nearby. We want to make sure everyone has a great experience. Thanks so much for your understanding!
+Hey [Guest Name]! Quick reminder — quiet hours are 10 PM to 8 AM. Thanks for being mindful of the neighbors!
 
 **Template 2 — After Receiving Noise Complaint:**
-Hi [Guest Name]! We've received a noise concern from a neighbor. We want to ensure you have a great stay while being respectful of the neighborhood. Please keep noise levels down, especially after 10 PM. We appreciate your cooperation — please reach out if you need anything!
+Hey [Guest Name]! We got a noise complaint from a neighbor. Please keep it down, especially after 10 PM. Reach out if you need anything!
 
 ## Property-Specific Info
 

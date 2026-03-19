@@ -169,7 +169,7 @@ bun run scripts/convert-xlsx-to-kb.ts --source /Users/victordozal/Downloads/prop
 
 ## Do Not Modify
 
-- `SOUL.md` — OpenClaw agent persona (read-only)
+- `SOUL.md` — OpenClaw agent persona (tone/style updates permitted; security/classification sections are read-only)
 - `knowledge-base.md` — Legacy single-file KB, now superseded. Do not write to it from new code.
 - `.env` — Local secrets, never commit
 - `data/` — Runtime persistence (managed by app)

@@ -47,13 +47,13 @@ Let us know if you have any questions or concerns.
 **Response**:
 Hey there! We're so sorry, but today might not be a good day for early check in since the cleaning team seems to be on a very tight schedule today :(
 
-We will reach out to them and ask them to let us know if they can get to it any earlier.
+We'll reach out to them and ask if they can get to it any earlier.
 Let us know if you have any other questions!
 
 ### Late Check out
 **How to verify**: Not possible, but if the next reservation is for separate rooms they can stay in the living room
 **Response**:
-Hey there! Unfortunately, we are not able to accommodate late check-out today as we have another guest arriving and our cleaning team needs time to prepare the property.
+Hey there! Unfortunately, we can't accommodate late check-out today as we have another guest arriving and our cleaning team needs time to prepare the property.
 
 Our standard check-out time is 11:00 AM. Please make sure to leave the property by that time, leaving the doors locked. If you need to store your luggage briefly, please let us know and we can try to help.
 
@@ -74,7 +74,7 @@ The only exception is service animals (not emotional support animals) as require
 ### Service Animals
 **How to verify**: Guest claims to have a service animal (not emotional support). Note: service animals cannot legally be denied entry.
 **Response**:
-Thanks for confirming that you will be bringing a service animal! To make sure we can assist you in the best way possible, could we get answers to the following two questions:
+Thanks for confirming that you'll be bringing a service animal! To make sure we can assist you in the best way possible, could we get answers to the following two questions:
 
 1. Is there a particular disability that requires you to have the service animal?
 2. If so, what work or task has the service animal been trained to perform?

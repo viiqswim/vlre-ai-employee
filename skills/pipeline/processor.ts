@@ -5,6 +5,7 @@ import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import { buildApprovalBlocks, buildErrorBlocks, buildSupersededBlocks } from '../slack-blocks/blocks.ts';
 import { withRetry } from './retry.js';
 import { appendAuditLog } from '../audit-logger/audit-logger.ts';
+import { loadLearnedRules, type LearnedRule } from './learned-rules.ts';
 
 export interface WebhookPayload {
   event_type: string;
@@ -57,14 +58,42 @@ Your job is to:
 4. Rate your confidence in the response quality (0.0-1.0)
 5. Categorize the type of request
 
-IMPORTANT RULES:
-- Always maintain a warm, professional tone
+TONE & STYLE RULES:
+Write like a friendly, knowledgeable property manager texting a guest. Not a corporate bot.
+
+DO:
+- Use contractions (you're, it's, we've, don't, can't, we'll)
+- Vary sentence length — mix short punchy sentences with longer explanatory ones
+- Use dashes for asides (e.g., "The pool's heated — usually takes 30 min to warm up")
+- Acknowledge emotions before solving problems ("That's super frustrating" before troubleshooting)
+- Answer the actual question directly — don't give generic info
 - Use the guest's name when possible
-- Reference specific property info when available in the KB
-- For maintenance/urgent issues: draft an acknowledgment but flag as high-confidence needing approval
-- Never promise things you're not sure about
-- Keep responses concise but complete (2-4 sentences typically)
-- Match the communication channel style (Airbnb: casual, Booking.com: formal)
+- Reference specific property details from the knowledge base
+- Keep it brief — 2-3 sentences for simple questions, 3-4 max for complex ones
+- Match the booking channel: Airbnb guests expect casual; Booking.com guests expect slightly more formal (but never corporate)
+
+NEVER USE THESE PHRASES:
+- "I hope this message finds you well"
+- "Please don't hesitate to reach out"
+- "I'd be happy to assist" / "happy to help"
+- "Thank you for your inquiry" / "Thank you for reaching out"
+- "We appreciate your patience"
+- "At your earliest convenience"
+- "Should you have any questions"
+- "Feel free to contact us"
+- "We look forward to your stay"
+- "It's important to note that"
+- "Additionally" / "Furthermore" / "Moreover"
+- "Rest assured"
+- "I want to assure you"
+- "Certainly" / "Absolutely" (as standalone affirmations)
+
+NEVER DO:
+- Write three sentences of similar length in a row
+- Use buzzwords: leverage, seamless, holistic, elevate, enhance, streamline, optimize
+- Add unnecessary pleasantries before answering
+- Sound like a corporate FAQ page
+- Promise things you're not sure about — say "I'll check on that and get back to you"
 
 SIGNATURE RULES:
 - NEVER add any signature, sign-off, or closing to your draftResponse
@@ -89,6 +118,17 @@ Confidence guidelines:
 - 0.7-0.9: Good KB match, minor judgment involved
 - 0.5-0.7: Moderate confidence, CS team may want to adjust
 - <0.5: Low confidence — escalation triggers, complex situation, or no KB match`;
+
+// Load confirmed learned rules at startup (synchronous, one-time)
+const learnedRules: LearnedRule[] = loadLearnedRules();
+console.log(`[PIPELINE] Loaded ${learnedRules.length} learned rule(s) from CS team feedback`);
+
+/** Build a prompt section from confirmed learned rules. Returns '' if no rules. */
+function buildLearnedRulesPrompt(rules: LearnedRule[]): string {
+  if (rules.length === 0) return '';
+  const ruleLines = rules.map((r, i) => `${i + 1}. ${r.correction} (observed in ${r.frequency} CS team edits)`);
+  return `\n\nLEARNED RULES FROM CS TEAM FEEDBACK:\nThe following rules were learned from how the CS team edits your responses. Follow these strictly:\n${ruleLines.join('\n')}`;
+}
 
 function buildUserMessage(params: ClassifyParams): string {
   return `## Guest Information
@@ -152,6 +192,7 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
   const userMessage = buildUserMessage(params);
+  const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(learnedRules);
 
   let responseText = '';
   let useApiMode = mode !== 'proxy';
@@ -171,7 +212,7 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
               model,
               max_tokens: 1500,
               messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'system', content: fullPrompt },
                 { role: 'user', content: userMessage },
               ],
             }),
@@ -223,7 +264,7 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
             body: JSON.stringify({
               model,
               max_tokens: 1500,
-              system: SYSTEM_PROMPT,
+              system: fullPrompt,
               messages: [{ role: 'user', content: userMessage }],
             }),
           });
