@@ -72,12 +72,19 @@ Hey there! Thanks for reaching out. We truly love pets. With that said, we canno
 The only exception is service animals (not emotional support animals) as required by law. If you have a service animal, please let us know and we can assist you.
 
 ### Service Animals
-**How to verify**: Guest claims to have a service animal (not emotional support).
-**Response**: If they ask about pets allowed, only service dogs because its illegal denied his entry to any place in USA (Cuando se genere un request que no este bloqueando el calendario)UPDATE sobre los inquiries de services dog Por ser un tema delicado, ya que no podemos negarle el acceso a alguien con un perro de servicio, tenemos este esquema de respuesta que nos ayuda primero que nada a confirmar que verdaderamente es un service dog y no un animal de soporte emocional, por ejemplo.  Thanks for confirming that you will be bringing a service animal! To make sure we can assist you in the best way possible, could we get answers to the two following questions: 1. Is there a particular disability that requires to have the service animal? 2. If so, what work or task has the service animal been trained to perform? Thanks again for your time Looking forward to your response!
+**How to verify**: Guest claims to have a service animal (not emotional support). Note: service animals cannot legally be denied entry.
+**Response**:
+Thanks for confirming that you will be bringing a service animal! To make sure we can assist you in the best way possible, could we get answers to the following two questions:
 
-### DELIVERY PROCESS IN EACH PROPERTY
+1. Is there a particular disability that requires you to have the service animal?
+2. If so, what work or task has the service animal been trained to perform?
+
+Thanks again for your time — looking forward to your response!
+
+### Delivery / Package Questions
 **How to verify**: Check if the property has mailbox access.
-**Response**: Tenemos llave deL mailbox en:   Nutria ✔️               Breckenbridge ❌ Sand dunes✔️       Hovenweep l❌ Gina✔️                   En Paul (lo dejan en la entrada porque no hay mailbox)
+**Response**:
+For deliveries, please use the property address. Mailbox access is available at most properties. If you have a package requiring a mailbox key, let us know and we can assist. Note: some properties do not have a physical mailbox — packages can be left at the entrance in that case.
 
 ### Thermostat Instructions
 **How to verify**: Check which thermostat brand the property has (see Property Quick Reference).
