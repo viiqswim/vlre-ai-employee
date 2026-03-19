@@ -1,7 +1,7 @@
 import { createSlackApp, startSlackApp, stopSlackApp } from '../skills/slack-bot/app.ts';
 import { registerAllHandlers } from '../skills/slack-bot/handlers.ts';
 import { createHostfullyClient } from '../skills/hostfully-client/index.ts';
-import { createKBReader } from '../skills/kb-reader/index.ts';
+import { createMultiPropertyKBReader } from '../skills/kb-reader/index.ts';
 import { createThreadTracker } from '../skills/thread-tracker/index.ts';
 import { startWebhookReceiver } from './webhook-receiver.ts';
 import { processWebhookMessage } from '../skills/pipeline/index.ts';
@@ -12,7 +12,11 @@ async function main(): Promise<void> {
   console.log(`\n🏠 ${BOT_NAME} starting up...\n`);
 
   const hostfullyClient = createHostfullyClient();
-  const kbReader = createKBReader('./knowledge-base.md');
+  const kbReader = createMultiPropertyKBReader(
+    './knowledge-base/common.md',
+    './knowledge-base/properties',
+    './knowledge-base/property-map.json'
+  );
   const threadTracker = createThreadTracker();
 
   const slackApp = createSlackApp();

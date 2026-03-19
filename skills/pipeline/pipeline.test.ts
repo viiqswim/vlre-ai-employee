@@ -2,7 +2,7 @@ import { test, expect, mock, beforeEach, afterEach, spyOn, describe } from 'bun:
 import { processWebhookMessage } from './processor.ts';
 import type { PipelineContext, WebhookPayload } from './processor.ts';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
-import type { KnowledgeBaseReader } from '../kb-reader/reader.ts';
+import type { MultiPropertyKBReader } from '../kb-reader/multi-reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import type { App } from '@slack/bolt';
 import { withRetry, isRetryableError } from './retry.js';
@@ -55,8 +55,8 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   } as unknown as HostfullyClient;
 
   const mockKBReader = {
-    search: mock(() => '## WiFi\nNetwork: PapiWifi\nPassword: Papi2024'),
-  } as unknown as KnowledgeBaseReader;
+    search: mock((_query: string, _propertyName?: string) => '## WiFi\nNetwork: PapiWifi\nPassword: Papi2024'),
+  } as unknown as MultiPropertyKBReader;
 
   const mockThreadTracker = {
     getPending: mock(() => undefined),
@@ -178,6 +178,49 @@ test('full pipeline: posts approval message to Slack on success', async () => {
 
   const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
   expect(trackCalls.length).toBe(1);
+
+  delete process.env['CLAUDE_MODE'];
+  delete process.env['CLAUDE_PROXY_URL'];
+});
+
+test('KB search is called with property name', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  classification: 'NEEDS_APPROVAL',
+                  confidence: 0.9,
+                  reasoning: 'Direct KB match',
+                  draftResponse: 'The WiFi password is Papi2024.',
+                  summary: 'WiFi request — Lakewood Retreat',
+                  category: 'wifi',
+                  conversationSummary: null,
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response)
+  ) as unknown as typeof global.fetch;
+
+  process.env['CLAUDE_MODE'] = 'proxy';
+  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+  const searchMock = mock((_q: string, _p?: string) => '## WiFi\nNetwork: PapiWifi\nPassword: Papi2024');
+  const context = makeContext({
+    kbReader: { search: searchMock } as unknown as MultiPropertyKBReader,
+  });
+
+  await processWebhookMessage(makePayload(), context);
+
+  expect(searchMock.mock.calls.length).toBe(1);
+  expect(typeof searchMock.mock.calls[0]?.[0]).toBe('string');
+  expect(searchMock.mock.calls[0]?.[1]).toBe('Lakewood Retreat');
 
   delete process.env['CLAUDE_MODE'];
   delete process.env['CLAUDE_PROXY_URL'];

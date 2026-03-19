@@ -1,6 +1,6 @@
 import type { App } from '@slack/bolt';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
-import type { KnowledgeBaseReader } from '../kb-reader/reader.ts';
+import type { MultiPropertyKBReader } from '../kb-reader/multi-reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import { buildApprovalBlocks, buildErrorBlocks, buildSupersededBlocks } from '../slack-blocks/blocks.ts';
 import { withRetry } from './retry.js';
@@ -18,7 +18,7 @@ export interface WebhookPayload {
 
 export interface PipelineContext {
   hostfullyClient: HostfullyClient;
-  kbReader: KnowledgeBaseReader;
+  kbReader: MultiPropertyKBReader;
   slackApp: App;
   slackChannelId: string;
   threadTracker: SlackThreadTracker;
@@ -330,7 +330,7 @@ export async function processWebhookMessage(
 
   let kbContext = '';
   try {
-    kbContext = kbReader.search(`${messageContent} ${propertyName}`);
+    kbContext = kbReader.search(messageContent, propertyName);
   } catch (error) {
     console.warn(`[PIPELINE] KB search failed: ${error}`);
     kbContext = 'Knowledge base unavailable.';

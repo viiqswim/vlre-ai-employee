@@ -1,0 +1,100 @@
+{
+  "properties": [
+    {
+      "code": "7213-nut",
+      "names": ["7213-NUT", "7213 Nutria Run", "Nutria Run", "Nutria", "7213 Nutria"],
+      "address": "7213 Nutria Run, Austin, TX 78744",
+      "kbFile": "properties/7213-nut.md"
+    },
+    {
+      "code": "3412-san",
+      "names": ["3412-SAN", "3412 Sand Dunes", "Sand Dunes", "3412 Sand Dunes Ave"],
+      "address": "3412 Sand Dunes Ave, Austin, TX",
+      "kbFile": "properties/3412-san.md"
+    },
+    {
+      "code": "3420-hov",
+      "names": ["3420-HOV", "3420 Hovenweep", "Hovenweep", "3420 Hovenweep Ave"],
+      "address": "3420 Hovenweep Ave, Austin, TX",
+      "kbFile": "properties/3420-hov.md"
+    },
+    {
+      "code": "3401-bre",
+      "names": ["3401-BRE", "3401 Breckenridge", "Breckenridge", "3401 Breckenridge Dr"],
+      "address": "3401 Breckenridge Dr, Austin, TX 78744",
+      "kbFile": "properties/3401-bre.md"
+    },
+    {
+      "code": "271-gin",
+      "names": ["271-GIN", "271 Gina", "Gina Drive", "271 Gina Dr", "Gina Dr"],
+      "address": "271 Gina Dr, Kyle, TX",
+      "kbFile": "properties/271-gin.md"
+    },
+    {
+      "code": "3505-ban",
+      "names": ["3505-BAN", "3505 Banton", "Banton", "3505 Banton Rd"],
+      "address": "3505 Banton Rd, Austin, TX 78722",
+      "kbFile": "properties/3505-ban.md"
+    },
+    {
+      "code": "407-gev",
+      "names": ["407-GEV", "407 Gevers", "Gevers", "407 S Gevers", "407 S Gevers St"],
+      "address": "407 S Gevers St, San Antonio, TX",
+      "kbFile": "properties/407-gev.md"
+    },
+    {
+      "code": "219-pau",
+      "names": ["219-PAU", "219 Paul Street", "219 Paul St", "Paul Street", "Pau", "219 Paul"],
+      "address": "219 Paul Street, San Antonio, TX 78203",
+      "kbFile": "properties/219-pau.md"
+    },
+    {
+      "code": "4403-hay",
+      "names": ["4403-HAY", "4403 Hayride", "4403 Hayride Lane", "Hayride 4403", "4403 Hayride Ln"],
+      "address": "4403 Hayride Ln, Austin, TX",
+      "kbFile": "properties/4403-hay.md"
+    },
+    {
+      "code": "4405-hay",
+      "names": ["4405-HAY", "4405 Hayride", "4405 Hayride Lane", "Hayride 4405", "4405 Hayride Ln"],
+      "address": "4405 Hayride Ln, Austin, TX",
+      "kbFile": "properties/4405-hay.md"
+    },
+    {
+      "code": "4410-hay",
+      "names": ["4410-HAY", "4410 Hayride", "4410 Hayride Lane", "Hayride 4410", "4410 Hayride Ln"],
+      "address": "4410 Hayride Ln, Austin, TX",
+      "kbFile": "properties/4410-hay.md"
+    },
+    {
+      "code": "5306-kin",
+      "names": ["5306-KIN", "5306 King Charles", "King Charles", "5306A-KIN", "5306 King Charles Dr"],
+      "address": "5306 King Charles Dr, Austin, TX 78724",
+      "kbFile": "properties/5306-kin.md"
+    },
+    {
+      "code": "6002-pal",
+      "names": ["6002-PAL", "6002 Palm", "Palm Circle", "6002 Palm Cir", "Palm"],
+      "address": "6002 Palm Cir, Austin, TX",
+      "kbFile": "properties/6002-pal.md"
+    },
+    {
+      "code": "6930-her",
+      "names": ["6930-HER", "6930 Heron", "Heron Flats", "6930 Heron Flats"],
+      "address": "6930 Heron Flats, Converse, TX",
+      "kbFile": "properties/6930-her.md"
+    },
+    {
+      "code": "8039-che",
+      "names": ["8039-CHE", "8039 Chestnut", "Chestnut Cedar", "8039 Chestnut Cedar Dr"],
+      "address": "8039 Chestnut Cedar Dr, Converse, TX",
+      "kbFile": "properties/8039-che.md"
+    },
+    {
+      "code": "1602-blu",
+      "names": ["1602-BLU", "1602 Bluebird", "Bluebird Drive", "1602 Bluebird Dr"],
+      "address": "1602 Bluebird Dr, Bailey, CO 80421",
+      "kbFile": "properties/1602-blu.md"
+    }
+  ]
+}
