@@ -3,6 +3,7 @@ import {
   buildApprovalBlocks,
   buildApprovedBlocks,
   buildRejectedBlocks,
+  buildSupersededBlocks,
   buildEditedBlocks,
   buildErrorBlocks,
   buildEditModal,
@@ -224,4 +225,22 @@ test('buildEditModal includes initial_value with draftResponse', () => {
   if (inputBlock?.type === 'input') {
     expect(inputBlock.element?.initial_value).toBe(draftText);
   }
+});
+
+test('buildSupersededBlocks returns array with superseded message', () => {
+  const blocks = buildSupersededBlocks();
+  expect(Array.isArray(blocks)).toBe(true);
+  expect(blocks.length).toBeGreaterThan(0);
+  
+  const sectionBlock = blocks.find(b => b.type === 'section');
+  expect(sectionBlock).toBeDefined();
+  if (sectionBlock?.type === 'section') {
+    expect(sectionBlock.text?.text).toContain('⏭️');
+    expect(sectionBlock.text?.text).toContain('Superseded');
+  }
+});
+
+test('buildSupersededBlocks returns exactly one block', () => {
+  const blocks = buildSupersededBlocks();
+  expect(blocks.length).toBe(1);
 });

@@ -177,6 +177,18 @@ export function buildRejectedBlocks(rejectorUserId: string): KnownBlock[] {
   ];
 }
 
+export function buildSupersededBlocks(): KnownBlock[] {
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `⏭️ *Superseded* — a newer message from this guest is pending review below.\n_This suggested response was not sent._`,
+      },
+    },
+  ];
+}
+
 /**
  * Build the "edited and sent" state — replaces the approval message after CS team edits.
  */
