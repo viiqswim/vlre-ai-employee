@@ -130,6 +130,31 @@ export function buildLearnedRulesPrompt(rules: LearnedRule[]): string {
   return `\n\nLEARNED RULES FROM CS TEAM FEEDBACK:\nThe following rules were learned from how the CS team edits your responses. Follow these strictly:\n${ruleLines.join('\n')}`;
 }
 
+/**
+ * Builds a human-readable conversation summary from raw thread history when
+ * Claude does not return a conversationSummary. Filters SYSTEM messages,
+ * humanizes sender labels, and caps output at 400 chars.
+ */
+export function buildFallbackSummary(conversationHistory: string): string {
+  if (!conversationHistory.trim()) return '';
+
+  const lines = conversationHistory.split('\n').filter(line => line.trim());
+  const filtered = lines.filter(line => !line.startsWith('[SYSTEM]'));
+
+  if (filtered.length === 0) return '';
+
+  const humanized = filtered.map(line =>
+    line
+      .replace(/^\[GUEST\]:\s*/i, 'Guest: ')
+      .replace(/^\[TRAVELER\]:\s*/i, 'Guest: ')
+      .replace(/^\[PROPERTY_MANAGER\]:\s*/i, 'Host: ')
+      .replace(/^\[Unknown\]:\s*/i, ''),
+  );
+
+  const joined = humanized.join('\n');
+  return joined.length > 400 ? joined.substring(0, 397) + '…' : joined;
+}
+
 function buildUserMessage(params: ClassifyParams): string {
   return `## Guest Information
 - Guest Name: ${params.guestName}
@@ -342,7 +367,7 @@ export async function processWebhookMessage(
     threadLeadUid = thread.participants?.find((p) => p.participantType === 'LEAD')?.participantUid;
     if (thread.messages && thread.messages.length > 1) {
       conversationHistory = thread.messages
-        .slice(-5)
+        .slice(-30)
         .map((m) => `[${m.senderType ?? 'Unknown'}]: ${m.content}`)
         .join('\n');
     }
@@ -415,6 +440,10 @@ export async function processWebhookMessage(
     return;
   }
 
+  const resolvedConversationSummary =
+    classifyResult.conversationSummary ||
+    (conversationHistory.trim() ? buildFallbackSummary(conversationHistory) : null);
+
   try {
     const blocks = buildApprovalBlocks({
       guestName,
@@ -428,7 +457,7 @@ export async function processWebhookMessage(
       confidence: classifyResult.confidence,
       classification: classifyResult.classification,
       summary: classifyResult.summary,
-      conversationSummary: classifyResult.conversationSummary,
+      conversationSummary: resolvedConversationSummary,
       messageUid: message_uid,
       threadUid: thread_uid,
       leadUid,
