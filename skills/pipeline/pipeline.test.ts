@@ -53,6 +53,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     getProperty: mock(() =>
       Promise.resolve({ uid: 'prop-001', name: 'Lakewood Retreat' }),
     ),
+    getMessages: mock(() => Promise.resolve([])),
   } as unknown as HostfullyClient;
 
   const mockKBReader = {
@@ -804,5 +805,308 @@ describe('SYSTEM_PROMPT content', () => {
 
   test('contains JSON format instruction with "urgency" field', () => {
     expect(SYSTEM_PROMPT).toContain('"urgency"');
+  });
+});
+
+describe('conversation history', () => {
+  test('includes conversation summary when prior messages exist', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.9,
+                    reasoning: 'test',
+                    draftResponse: 'So glad you enjoyed it!',
+                    summary: 'Positive feedback',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response),
+    ) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getMessages: mock(() =>
+          Promise.resolve([
+            {
+              uid: 'msg-000',
+              threadUid: 'thread-001',
+              leadUid: 'lead-001',
+              content: 'Hello, I have arrived!',
+              senderType: 'GUEST',
+              createdAt: '2026-03-13T10:00:00Z',
+            },
+            {
+              uid: 'msg-001',
+              threadUid: 'thread-001',
+              leadUid: 'lead-001',
+              content: 'Thank you so much, great place',
+              senderType: 'GUEST',
+              createdAt: '2026-03-14T09:00:00Z',
+            },
+          ]),
+        ),
+      } as unknown as HostfullyClient,
+    });
+
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    const blocks = (postCalls[0]?.[0] as { blocks: Array<{ type: string; text?: { text?: string }; elements?: unknown[] }> }).blocks;
+    const summaryBlock = blocks.find((b) => b.type === 'section' && b.text?.text?.includes('Conversation so far'));
+    expect(summaryBlock).toBeDefined();
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
+  });
+
+  test('filters messages to matching threadUid only', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.9,
+                    reasoning: 'test',
+                    draftResponse: 'Thanks!',
+                    summary: 'Thanks',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response),
+    ) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getMessages: mock(() =>
+          Promise.resolve([
+            {
+              uid: 'msg-000',
+              threadUid: 'thread-001',
+              leadUid: 'lead-001',
+              content: 'FROM_CORRECT_THREAD',
+              senderType: 'GUEST',
+              createdAt: '2026-03-13T10:00:00Z',
+            },
+            {
+              uid: 'msg-999',
+              threadUid: 'thread-OTHER',
+              leadUid: 'lead-001',
+              content: 'FROM_OTHER_THREAD',
+              senderType: 'GUEST',
+              createdAt: '2026-03-10T10:00:00Z',
+            },
+          ]),
+        ),
+      } as unknown as HostfullyClient,
+    });
+
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    const blocks = (postCalls[0]?.[0] as { blocks: Array<{ type: string; text?: { text?: string }; elements?: unknown[] }> }).blocks;
+
+    const summaryBlock = blocks.find((b) => b.type === 'section' && b.text?.text?.includes('Conversation so far'));
+    expect(summaryBlock).toBeDefined();
+
+    const blocksStr = JSON.stringify(blocks);
+    expect(blocksStr).not.toContain('FROM_OTHER_THREAD');
+    expect(blocksStr).toContain('FROM_CORRECT_THREAD');
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
+  });
+
+  test('excludes the current message (message_uid) from conversation history', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.9,
+                    reasoning: 'test',
+                    draftResponse: 'Thanks!',
+                    summary: 'Thanks',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response),
+    ) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getMessages: mock(() =>
+          Promise.resolve([
+            {
+              uid: 'msg-000',
+              threadUid: 'thread-001',
+              leadUid: 'lead-001',
+              content: 'PRIOR_MESSAGE_CONTENT',
+              senderType: 'GUEST',
+              createdAt: '2026-03-13T10:00:00Z',
+            },
+            {
+              uid: 'msg-001',
+              threadUid: 'thread-001',
+              leadUid: 'lead-001',
+              content: 'CURRENT_MESSAGE_CONTENT',
+              senderType: 'GUEST',
+              createdAt: '2026-03-14T09:00:00Z',
+            },
+          ]),
+        ),
+      } as unknown as HostfullyClient,
+    });
+
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    const blocks = (postCalls[0]?.[0] as { blocks: Array<{ type: string; text?: { text?: string }; elements?: unknown[] }> }).blocks;
+
+    const summaryBlock = blocks.find((b) => b.type === 'section' && b.text?.text?.includes('Conversation so far'));
+    expect(summaryBlock).toBeDefined();
+    expect(JSON.stringify(blocks)).toContain('PRIOR_MESSAGE_CONTENT');
+    expect(summaryBlock?.text?.text).not.toContain('CURRENT_MESSAGE_CONTENT');
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
+  });
+
+  test('continues pipeline when getMessages throws', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.8,
+                    reasoning: 'test',
+                    draftResponse: 'Thanks!',
+                    summary: 'Thanks',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response),
+    ) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getMessages: mock(() => Promise.reject(new Error('API error fetching messages'))),
+      } as unknown as HostfullyClient,
+    });
+
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
+  });
+
+  test('does not call getMessages when leadUid is empty', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.5,
+                    reasoning: 'test',
+                    draftResponse: 'Thanks!',
+                    summary: 'Thanks',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response),
+    ) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const getMessagesMock = mock(() => Promise.resolve([]));
+
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getThread: mock(() => Promise.resolve({ uid: 'thread-001', participants: [] })),
+        getMessages: getMessagesMock,
+      } as unknown as HostfullyClient,
+    });
+
+    const payload = makePayload({ lead_uid: undefined });
+    await processWebhookMessage(payload, context);
+
+    expect(getMessagesMock.mock.calls.length).toBe(0);
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
   });
 });
