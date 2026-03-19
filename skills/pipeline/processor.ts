@@ -49,7 +49,7 @@ interface ClassifyResult {
 
 const BOT_NAME = process.env['BOT_NAME'] ?? 'Papi Chulo';
 
-const SYSTEM_PROMPT = `You are ${BOT_NAME}, a professional guest communication specialist for VL Real Estate, a short-term rental company in Austin, Texas.
+export const SYSTEM_PROMPT = `You are ${BOT_NAME}, a professional guest communication specialist for VL Real Estate, a short-term rental company in Austin, Texas.
 
 Your job is to:
 1. Read a guest's message carefully
@@ -124,7 +124,7 @@ const learnedRules: LearnedRule[] = loadLearnedRules();
 console.log(`[PIPELINE] Loaded ${learnedRules.length} learned rule(s) from CS team feedback`);
 
 /** Build a prompt section from confirmed learned rules. Returns '' if no rules. */
-function buildLearnedRulesPrompt(rules: LearnedRule[]): string {
+export function buildLearnedRulesPrompt(rules: LearnedRule[]): string {
   if (rules.length === 0) return '';
   const ruleLines = rules.map((r, i) => `${i + 1}. ${r.correction} (observed in ${r.frequency} CS team edits)`);
   return `\n\nLEARNED RULES FROM CS TEAM FEEDBACK:\nThe following rules were learned from how the CS team edits your responses. Follow these strictly:\n${ruleLines.join('\n')}`;
@@ -147,7 +147,7 @@ ${params.knowledgeBase}
 Please classify this message and draft a response following the JSON format in your instructions.`;
 }
 
-function parseClassifyResponse(responseText: string): ClassifyResult {
+export function parseClassifyResponse(responseText: string): ClassifyResult {
   const jsonMatch =
     responseText.match(/```(?:json)?\s*([\s\S]+?)\s*```/) ??
     responseText.match(/(\{[\s\S]+\})/);

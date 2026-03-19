@@ -9,9 +9,11 @@ import {
   buildEditModal,
   formatChannel,
   formatConfidence,
+  type ApprovalMessageParams,
+  type PostActionContext,
 } from './blocks';
 
-const mockParams = {
+const mockParams: ApprovalMessageParams = {
   guestName: 'John Doe',
   propertyName: 'Downtown Loft',
   checkInDate: '2024-03-20',
@@ -27,7 +29,39 @@ const mockParams = {
   messageUid: 'msg-123',
   threadUid: 'thread-456',
   leadUid: 'lead-789',
+  urgency: false,
 };
+
+const mockContext: PostActionContext = {
+  guestName: 'John Doe',
+  propertyName: 'Downtown Loft',
+  checkInDate: '2024-03-20',
+  checkOutDate: '2024-03-25',
+  threadUid: 'thread-456',
+  leadUid: 'lead-789',
+};
+
+function makeParams(overrides: Partial<ApprovalMessageParams> = {}): ApprovalMessageParams {
+  return {
+    guestName: 'John Smith',
+    propertyName: 'Test Property',
+    checkInDate: '2026-03-20',
+    checkOutDate: '2026-03-25',
+    nightCount: 5,
+    channel: 'AIRBNB',
+    guestMessage: 'Test message',
+    draftResponse: 'Test response',
+    confidence: 0.9,
+    classification: 'NEEDS_APPROVAL',
+    summary: 'Test summary',
+    conversationSummary: null,
+    messageUid: 'msg-001',
+    threadUid: 'thread-001',
+    leadUid: 'lead-001',
+    urgency: false,
+    ...overrides,
+  };
+}
 
 test('buildApprovalBlocks returns array with header block containing property name', () => {
   const blocks = buildApprovalBlocks(mockParams);
@@ -133,7 +167,7 @@ test('formatConfidence(0.3) returns string containing "🔴"', () => {
 });
 
 test('buildApprovedBlocks returns array with approval message', () => {
-  const blocks = buildApprovedBlocks('U123456', 'Thanks for your message!');
+  const blocks = buildApprovedBlocks('U123456', 'Thanks for your message!', mockContext);
   expect(Array.isArray(blocks)).toBe(true);
   expect(blocks.length).toBeGreaterThan(0);
   
@@ -146,7 +180,7 @@ test('buildApprovedBlocks returns array with approval message', () => {
 });
 
 test('buildRejectedBlocks returns array with rejection message', () => {
-  const blocks = buildRejectedBlocks('U123456');
+  const blocks = buildRejectedBlocks('U123456', mockContext);
   expect(Array.isArray(blocks)).toBe(true);
   expect(blocks.length).toBeGreaterThan(0);
   
@@ -159,7 +193,7 @@ test('buildRejectedBlocks returns array with rejection message', () => {
 });
 
 test('buildEditedBlocks returns array with edit message', () => {
-  const blocks = buildEditedBlocks('U123456', 'Edited response text');
+  const blocks = buildEditedBlocks('U123456', 'Edited response text', mockContext);
   expect(Array.isArray(blocks)).toBe(true);
   expect(blocks.length).toBeGreaterThan(0);
   
@@ -243,4 +277,104 @@ test('buildSupersededBlocks returns array with superseded message', () => {
 test('buildSupersededBlocks returns exactly one block', () => {
   const blocks = buildSupersededBlocks();
   expect(blocks.length).toBe(1);
+});
+
+test('buildApprovedBlocks with context contains guest name in context block', () => {
+  const blocks = buildApprovedBlocks('U999', 'Great, confirmed!', mockContext);
+  const allText = blocks
+    .filter(b => b.type === 'context')
+    .flatMap(b => b.type === 'context' ? (b.elements ?? []) : [])
+    .map(e => ('text' in e ? e.text : ''))
+    .join(' ');
+  expect(allText).toContain('John Doe');
+});
+
+test('buildApprovedBlocks with context contains Hostfully link', () => {
+  const blocks = buildApprovedBlocks('U999', 'Confirmed!', mockContext);
+  const allText = blocks
+    .filter(b => b.type === 'context')
+    .flatMap(b => b.type === 'context' ? (b.elements ?? []) : [])
+    .map(e => ('text' in e ? e.text : ''))
+    .join(' ');
+  expect(allText).toContain('hostfully.com');
+  expect(allText).toContain('thread-456');
+  expect(allText).toContain('lead-789');
+});
+
+test('buildRejectedBlocks with context contains property name', () => {
+  const blocks = buildRejectedBlocks('U999', mockContext);
+  const allText = blocks
+    .filter(b => b.type === 'context')
+    .flatMap(b => b.type === 'context' ? (b.elements ?? []) : [])
+    .map(e => ('text' in e ? e.text : ''))
+    .join(' ');
+  expect(allText).toContain('Downtown Loft');
+});
+
+test('buildApprovalBlocks with urgency:true — header starts with 🚨 URGENT', () => {
+  const blocks = buildApprovalBlocks(makeParams({ urgency: true }));
+  const headerBlock = blocks.find(b => b.type === 'header');
+  expect(headerBlock).toBeDefined();
+  if (headerBlock?.type === 'header') {
+    expect(headerBlock.text?.text).toMatch(/^🚨 URGENT/);
+  }
+});
+
+test('buildApprovalBlocks with urgency:false — header starts with 🏠 New Guest Message', () => {
+  const blocks = buildApprovalBlocks(makeParams({ urgency: false }));
+  const headerBlock = blocks.find(b => b.type === 'header');
+  expect(headerBlock).toBeDefined();
+  if (headerBlock?.type === 'header') {
+    expect(headerBlock.text?.text).toMatch(/^🏠 New Guest Message/);
+  }
+});
+
+test('buildApprovalBlocks with urgency:true — blocks contain "immediate attention"', () => {
+  const blocks = buildApprovalBlocks(makeParams({ urgency: true }));
+  const allText = blocks
+    .map(b => {
+      if (b.type === 'section' && b.text) return b.text.text;
+      return '';
+    })
+    .join(' ');
+  expect(allText).toContain('immediate attention');
+});
+
+test('buildApprovalBlocks button value payload size < 2000 chars (worst-case inputs)', () => {
+  const worstCase = makeParams({
+    guestName: 'A'.repeat(50),
+    propertyName: 'B'.repeat(50),
+    checkInDate: '2026-12-31',
+    checkOutDate: '2026-12-31',
+    messageUid: 'msg-' + 'x'.repeat(36),
+    threadUid: 'thread-' + 'x'.repeat(36),
+    leadUid: 'lead-' + 'x'.repeat(36),
+    draftResponse: 'D'.repeat(2000),
+  });
+  const blocks = buildApprovalBlocks(worstCase);
+  const actionsBlock = blocks.find(b => b.type === 'actions');
+  expect(actionsBlock).toBeDefined();
+  if (actionsBlock?.type === 'actions') {
+    for (const el of actionsBlock.elements ?? []) {
+      if ('value' in el && typeof el.value === 'string') {
+        expect(el.value.length).toBeLessThan(2000);
+      }
+    }
+  }
+});
+
+test('buildEditModal private_metadata contains draftResponse', () => {
+  const draftText = 'This is a draft response for the modal.';
+  const modal = buildEditModal({
+    draftResponse: draftText,
+    channelId: 'C123456',
+    messageTs: '1234567890.123456',
+    threadUid: 'thread-456',
+    leadUid: 'lead-789',
+    messageUid: 'msg-123',
+  }) as { private_metadata: string };
+
+  expect(typeof modal.private_metadata).toBe('string');
+  const parsed = JSON.parse(modal.private_metadata) as { draftResponse?: string };
+  expect(parsed.draftResponse).toBe(draftText);
 });

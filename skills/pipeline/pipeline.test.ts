@@ -1,11 +1,12 @@
 import { test, expect, mock, beforeEach, afterEach, spyOn, describe } from 'bun:test';
-import { processWebhookMessage } from './processor.ts';
+import { processWebhookMessage, parseClassifyResponse, buildLearnedRulesPrompt, SYSTEM_PROMPT } from './processor.ts';
 import type { PipelineContext, WebhookPayload } from './processor.ts';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { MultiPropertyKBReader } from '../kb-reader/multi-reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import type { App } from '@slack/bolt';
 import { withRetry, isRetryableError } from './retry.js';
+import type { LearnedRule } from './learned-rules.ts';
 
 function makePayload(overrides: Partial<WebhookPayload> = {}): WebhookPayload {
   return {
@@ -688,5 +689,120 @@ describe('proxy→API fallback', () => {
     delete process.env['CLAUDE_MODE'];
     delete process.env['CLAUDE_FALLBACK_TO_API'];
     delete process.env['ANTHROPIC_API_KEY'];
+  });
+});
+
+describe('parseClassifyResponse', () => {
+  test('parses urgency:true from JSON response', () => {
+    const json = JSON.stringify({
+      classification: 'NEEDS_APPROVAL',
+      confidence: 0.95,
+      reasoning: 'Guest locked out',
+      draftResponse: 'We will send someone right away.',
+      summary: 'Lockout emergency',
+      category: 'access',
+      conversationSummary: null,
+      urgency: true,
+    });
+    const result = parseClassifyResponse(json);
+    expect(result.urgency).toBe(true);
+    expect(result.classification).toBe('NEEDS_APPROVAL');
+    expect(result.confidence).toBe(0.95);
+  });
+
+  test('defaults urgency to false when field is missing', () => {
+    const json = JSON.stringify({
+      classification: 'NEEDS_APPROVAL',
+      confidence: 0.8,
+      reasoning: 'WiFi question',
+      draftResponse: 'The WiFi password is Papi2024.',
+      summary: 'WiFi request',
+      category: 'wifi',
+      conversationSummary: null,
+    });
+    const result = parseClassifyResponse(json);
+    expect(result.urgency).toBe(false);
+  });
+
+  test('returns fallback with urgency:false when JSON is invalid', () => {
+    const result = parseClassifyResponse('not valid json at all');
+    expect(result.urgency).toBe(false);
+    expect(result.confidence).toBe(0.3);
+    expect(result.classification).toBe('NEEDS_APPROVAL');
+  });
+
+  test('extracts JSON wrapped in markdown code fence', () => {
+    const wrapped = '```json\n' + JSON.stringify({
+      classification: 'NEEDS_APPROVAL',
+      confidence: 0.75,
+      reasoning: 'Parking question',
+      draftResponse: 'Parking is available in the driveway.',
+      summary: 'Parking question',
+      category: 'parking',
+      conversationSummary: null,
+      urgency: false,
+    }) + '\n```';
+    const result = parseClassifyResponse(wrapped);
+    expect(result.confidence).toBe(0.75);
+    expect(result.category).toBe('parking');
+  });
+});
+
+describe('buildLearnedRulesPrompt', () => {
+  test('returns "" for empty rules array', () => {
+    expect(buildLearnedRulesPrompt([])).toBe('');
+  });
+
+  test('contains "LEARNED RULES FROM CS TEAM FEEDBACK" with confirmed rules', () => {
+    const rules: LearnedRule[] = [
+      {
+        id: 'rule-001',
+        pattern: 'avoid corporate phrases',
+        correction: 'Do not use "I hope this message finds you well"',
+        examples: [{ original: 'I hope this message finds you well.', edited: 'Hey John!' }],
+        frequency: 5,
+        status: 'confirmed',
+        createdAt: '2026-03-01T00:00:00Z',
+        confirmedAt: '2026-03-10T00:00:00Z',
+      },
+    ];
+    const result = buildLearnedRulesPrompt(rules);
+    expect(result).toContain('LEARNED RULES FROM CS TEAM FEEDBACK');
+    expect(result).toContain('Do not use "I hope this message finds you well"');
+    expect(result).toContain('5 CS team edits');
+  });
+
+  test('includes frequency count for each rule', () => {
+    const rules: LearnedRule[] = [
+      {
+        id: 'rule-002',
+        pattern: 'sign-off removal',
+        correction: 'Never end with Best regards',
+        examples: [],
+        frequency: 12,
+        status: 'confirmed',
+        createdAt: '2026-03-01T00:00:00Z',
+      },
+    ];
+    const result = buildLearnedRulesPrompt(rules);
+    expect(result).toContain('12');
+  });
+});
+
+describe('SYSTEM_PROMPT content', () => {
+  test('contains "NEVER USE THESE PHRASES" section', () => {
+    expect(SYSTEM_PROMPT).toContain('NEVER USE THESE PHRASES');
+  });
+
+  test('contains "TONE & STYLE RULES" section', () => {
+    expect(SYSTEM_PROMPT).toContain('TONE & STYLE RULES');
+  });
+
+  test('contains "SIGNATURE RULES" section', () => {
+    expect(SYSTEM_PROMPT).toContain('SIGNATURE RULES');
+  });
+
+  test('contains JSON format instruction with "urgency" field', () => {
+    expect(SYSTEM_PROMPT).toContain('"urgency"');
   });
 });
