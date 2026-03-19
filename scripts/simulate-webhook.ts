@@ -50,7 +50,7 @@ ${bold('EXAMPLES')}
 const HOSTFULLY_API_KEY  = process.env['HOSTFULLY_API_KEY'] ?? '';
 const HOSTFULLY_AGENCY_UID = process.env['HOSTFULLY_AGENCY_UID'] ?? '';
 const HOSTFULLY_API_URL  = process.env['HOSTFULLY_API_URL'] ?? 'https://api.hostfully.com/api/v3.2';
-const WEBHOOK_PORT       = parseInt(process.env['WEBHOOK_PORT'] ?? '3001', 10);
+const WEBHOOK_PORT       = parseInt(process.env['WEBHOOK_PORT'] ?? '48901', 10);
 
 if (!HOSTFULLY_API_KEY || !HOSTFULLY_AGENCY_UID) {
   console.error(red('❌ Missing required env: HOSTFULLY_API_KEY, HOSTFULLY_AGENCY_UID'));

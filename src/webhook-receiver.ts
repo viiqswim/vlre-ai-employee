@@ -1,7 +1,7 @@
 import type { HostfullyWebhookPayload } from '../skills/hostfully-client/index.ts';
 import { createDeduplicator } from '../skills/dedup/index.ts';
 
-const PORT = parseInt(process.env['WEBHOOK_PORT'] ?? '3001', 10);
+const PORT = parseInt(process.env['WEBHOOK_PORT'] ?? '48901', 10);
 
 const dedup = createDeduplicator('data/processed-messages.txt');
 

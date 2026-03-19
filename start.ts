@@ -13,7 +13,7 @@ cd(__dirname)
 // Read config from environment (Bun auto-loads .env, so process.env has all values)
 const BOT_NAME = process.env['BOT_NAME'] || 'Papi Chulo'
 // Use || not ?? — handles empty string (WEBHOOK_PORT= in .env gives empty string, not undefined)
-const WEBHOOK_PORT = process.env['WEBHOOK_PORT'] || '3001'
+const WEBHOOK_PORT = process.env['WEBHOOK_PORT'] || '48901'
 
 console.log(`Starting ${BOT_NAME}...`)
 

@@ -38,7 +38,7 @@ curl -s http://127.0.0.1:18789/health
 
 - `OPENCLAW_HOOKS_TOKEN` is in `.env` — never commit this file
 - The gateway auth token is stored in `~/.openclaw/openclaw.json` — this file is not in the repo
-- Never expose port 18789 via Tailscale Funnel — only the webhook receiver (port 3001) is public
+- Never expose port 18789 via Tailscale Funnel — only the webhook receiver (port 48901) is public
 - Only install skills from `skills/` in this repo — never from ClawHub
 - The agent persona (SOUL.md) includes prompt injection defense
 

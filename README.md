@@ -12,7 +12,7 @@ Built on OpenClaw for skill-based extensibility and persistent memory. Built wit
 flowchart TD
     A([Guest sends message]) --> B[Hostfully PMS]
     B -->|NEW_INBOX_MESSAGE webhook| TF[Tailscale Funnel :443]
-    TF -->|forwards to :3001| WR[Webhook Receiver]
+    TF -->|forwards to :48901| WR[Webhook Receiver]
     WR -->|validate + dedup| PP[Pipeline Processor]
     PP -->|fetch message/lead/property| HF[Hostfully API]
     PP -->|search| KB[knowledge-base.md]
@@ -72,7 +72,7 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |
 | `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |
-| `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `3001` |
+| `WEBHOOK_PORT` | Yes | Local port for the webhook server. Default: `48901` |
 | `WEBHOOK_PUBLIC_URL` | Auto | Set automatically by `start.ts` from Tailscale Funnel — don't set this manually |
 | `OPENCLAW_HOOKS_TOKEN` | Yes | 64-char hex token generated during OpenClaw onboarding |
 
@@ -191,7 +191,7 @@ bun run scripts/simulate-webhook.ts --force
    ```
 2. Check the service is up:
    ```bash
-   curl http://localhost:3001/health
+   curl http://localhost:48901/health
    ```
 3. Check server logs for `[PIPELINE] Failed to post to Slack`. If you see `channel_not_found`, the bot hasn't been invited to the channel — run `/invite @YourBotName` in Slack.
 
