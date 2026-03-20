@@ -7,6 +7,7 @@ import { appendToKB, undoAppend } from './kb-writer.js';
 import { buildKBAnswerBlocks, buildKBDontKnowBlocks, buildKBAddAnswerModal, buildKBAddedConfirmBlocks, buildKBUndoneBlocks, buildKBConfirmedBlocks, buildKBCorrectedBlocks, buildKBCorrectionModal } from './kb-blocks.js';
 import { recordFeedback } from './kb-feedback.js';
 import type { KnownBlock } from '@slack/types';
+import type { NotionSearcher } from '../notion-search/notion-search.js';
 
 const COMMON_KB_PATH = 'knowledge-base/common.md';
 const PROPERTY_MAP_PATH = 'knowledge-base/property-map.json';
@@ -43,7 +44,7 @@ function stripMention(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/g, '').trim();
 }
 
-export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBReader): void {
+export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBReader, notionSearch?: NotionSearcher): void {
   const kbChannelId = (process.env['SLACK_KB_CHANNEL_ID'] ?? '').trim().replace(/^[="']+|[="']+$/g, '');
   if (!kbChannelId) { console.warn('[KB-ASSISTANT] SLACK_KB_CHANNEL_ID not set — KB assistant disabled'); return; }
 
@@ -83,7 +84,21 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
         const propertyMap = loadPropertyMap();
         const detectedProperty = detectPropertyInQuestion(question, propertyMap) ?? undefined;
         const kbContext = kbReader.search(question, detectedProperty);
-        const result = await askKBAssistant(question, kbContext);
+
+        let notionContext = '';
+        if (notionSearch) {
+          try {
+            const notionResults = await notionSearch.search(question);
+            notionContext = notionSearch.formatAsContext(notionResults);
+          } catch (error) {
+            console.warn('[KB-ASSISTANT] Notion search failed:', (error as Error).message);
+          }
+        }
+        const fullContext = notionContext
+          ? kbContext + '\n\n---\n\n## Additional Context (Company Wiki)\n' + notionContext
+          : kbContext;
+
+        const result = await askKBAssistant(question, fullContext);
 
         const filePath = resolveKBFilePath(question);
         const searchedFiles: string[] = ['Common knowledge base'];

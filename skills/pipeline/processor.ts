@@ -2,6 +2,7 @@ import type { App } from '@slack/bolt';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { MultiPropertyKBReader } from '../kb-reader/multi-reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
+import type { NotionSearcher } from '../notion-search/notion-search.js';
 import { buildApprovalBlocks, buildErrorBlocks, buildSupersededBlocks } from '../slack-blocks/blocks.ts';
 import { withRetry } from './retry.js';
 import { appendAuditLog } from '../audit-logger/audit-logger.ts';
@@ -24,6 +25,7 @@ export interface PipelineContext {
   slackApp: App;
   slackChannelId: string;
   threadTracker: SlackThreadTracker;
+  notionSearch?: NotionSearcher;
 }
 
 interface ClassifyParams {
@@ -473,6 +475,19 @@ export async function processWebhookMessage(
     kbContext = 'Knowledge base unavailable.';
   }
 
+  let notionContext = '';
+  if (context.notionSearch) {
+    try {
+      const notionResults = await context.notionSearch.search(messageContent);
+      notionContext = context.notionSearch.formatAsContext(notionResults);
+    } catch (error) {
+      console.warn(`[PIPELINE] Notion search failed, continuing with KB only: ${(error as Error).message}`);
+    }
+  }
+  const fullKBContext = notionContext
+    ? kbContext + '\n\n---\n\n## Additional Context (Company Wiki)\n' + notionContext
+    : kbContext;
+
   let classifyResult: ClassifyResult;
   try {
     classifyResult = await callClaude({
@@ -483,7 +498,7 @@ export async function processWebhookMessage(
       checkInDate,
       checkOutDate,
       channel,
-      knowledgeBase: kbContext,
+      knowledgeBase: fullKBContext,
     });
     console.log(`[PIPELINE] Classified: ${classifyResult.classification} (${Math.round(classifyResult.confidence * 100)}%)`);
   } catch (error) {

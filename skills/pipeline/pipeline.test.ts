@@ -7,6 +7,7 @@ import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import type { App } from '@slack/bolt';
 import { withRetry, isRetryableError } from './retry.js';
 import type { LearnedRule } from './learned-rules.ts';
+import type { NotionSearcher } from '../notion-search/notion-search.js';
 
 function makePayload(overrides: Partial<WebhookPayload> = {}): WebhookPayload {
   return {
@@ -787,6 +788,128 @@ describe('buildLearnedRulesPrompt', () => {
     ];
     const result = buildLearnedRulesPrompt(rules);
     expect(result).toContain('12');
+  });
+});
+
+describe('notionSearch integration', () => {
+  function makeSuccessFetch() {
+    return mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.9,
+                    reasoning: 'test',
+                    draftResponse: 'Here is your answer.',
+                    summary: 'Test question',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response)
+    ) as unknown as typeof global.fetch;
+  }
+
+  test('pipeline without notionSearch completes successfully (backward compatible)', async () => {
+    global.fetch = makeSuccessFetch();
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const context = makeContext();
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
+  });
+
+  test('pipeline with notionSearch that throws: completes with KB context only (warning logged)', async () => {
+    global.fetch = makeSuccessFetch();
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const mockNotionSearch = {
+      search: mock(() => Promise.reject(new Error('Notion DB unavailable'))),
+      formatAsContext: mock(() => ''),
+    } as unknown as NotionSearcher;
+
+    const context = makeContext({ notionSearch: mockNotionSearch });
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+    expect((mockNotionSearch.search as ReturnType<typeof mock>).mock.calls.length).toBe(1);
+    expect((mockNotionSearch.formatAsContext as ReturnType<typeof mock>).mock.calls.length).toBe(0);
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
+  });
+
+  test('pipeline with notionSearch returning results: knowledgeBase passed to Claude includes Additional Context section', async () => {
+    let capturedKnowledgeBase = '';
+    global.fetch = mock((url: string | Request, opts?: RequestInit) => {
+      if (opts?.body) {
+        try {
+          const body = JSON.parse(opts.body as string) as { messages?: Array<{ role: string; content: string }> };
+          const userMsg = body.messages?.find(m => m.role === 'user');
+          if (userMsg) capturedKnowledgeBase = userMsg.content;
+        } catch (_) { }
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.9,
+                    reasoning: 'test',
+                    draftResponse: 'Here is your answer.',
+                    summary: 'Test question',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response);
+    }) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+
+    const mockNotionSearch = {
+      search: mock(() => Promise.resolve([{ heading: 'Pets Policy', content: 'No pets allowed.', pageTitle: 'House Rules', score: 0.9 }])),
+      formatAsContext: mock(() => '### Pets Policy (from: House Rules)\nNo pets allowed.'),
+    } as unknown as NotionSearcher;
+
+    const context = makeContext({ notionSearch: mockNotionSearch });
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+    expect((mockNotionSearch.search as ReturnType<typeof mock>).mock.calls.length).toBe(1);
+    expect((mockNotionSearch.formatAsContext as ReturnType<typeof mock>).mock.calls.length).toBe(1);
+    expect(capturedKnowledgeBase).toContain('Additional Context (Company Wiki)');
+    expect(capturedKnowledgeBase).toContain('No pets allowed.');
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_PROXY_URL'];
   });
 });
 
