@@ -154,9 +154,10 @@ describe('formatKBEntry', () => {
     };
 
     const result = await formatKBEntry('¿Qué marca es la lavadora?', 'Samsung');
-    expect(result).toContain('### Samsung');
-    expect(result).toContain('Q: ¿Qué marca');
-    expect(result).toContain('A: Samsung');
+    expect(result.entry).toContain('### Samsung');
+    expect(result.entry).toContain('Q: ¿Qué marca');
+    expect(result.entry).toContain('A: Samsung');
+    expect(result.appliesToAll).toBe(false);
   });
 
   test("fallback includes question and answer", async () => {
@@ -164,8 +165,9 @@ describe('formatKBEntry', () => {
     delete process.env['ANTHROPIC_API_KEY'];
 
     const result = await formatKBEntry('What is the WiFi?', 'Network: Patitos-2g');
-    expect(result).toBeTruthy();
-    expect(result).toContain('WiFi');
-    expect(result).toContain('Patitos');
+    expect(result.entry).toBeTruthy();
+    expect(result.entry).toContain('WiFi');
+    expect(result.entry).toContain('Patitos');
+    expect(result.appliesToAll).toBe(false);
   });
 });

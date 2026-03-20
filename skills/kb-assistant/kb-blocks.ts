@@ -66,13 +66,13 @@ export function buildKBAddAnswerModal(question: string, channelId: string, threa
   };
 }
 
-export function buildKBAddedConfirmBlocks(question: string, filePath: string, appendedText: string): KnownBlock[] {
+export function buildKBAddedConfirmBlocks(question: string, filePath: string, appendedText: string, storageLabel: string): KnownBlock[] {
   const preview = appendedText.length > 300 ? appendedText.substring(0, 297) + '\u2026' : appendedText;
   const undoValue = JSON.stringify({ filePath, appendedText });
   const safeUndoValue = undoValue.length > 1990 ? JSON.stringify({ filePath, appendedText: appendedText.substring(0, 500) + '\u2026' }) : undoValue;
   return [
     { type: 'section', text: { type: 'mrkdwn', text: '\u2705 Added to knowledge base!' } },
-    { type: 'context', elements: [{ type: 'mrkdwn', text: '*File:* `' + filePath + '` \u203a Team Additions' }] },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: storageLabel }] },
     { type: 'section', text: { type: 'mrkdwn', text: '```\n' + preview + '\n```' } },
     { type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: '\u21a9\ufe0f Undo', emoji: true }, action_id: 'kb_undo_add', value: safeUndoValue, style: 'danger' }] },
   ];
@@ -91,13 +91,13 @@ export function buildKBConfirmedBlocks(question: string, answer: string, source:
   ];
 }
 
-export function buildKBCorrectedBlocks(question: string, correction: string, filePath: string, correctedByUserId: string): KnownBlock[] {
+export function buildKBCorrectedBlocks(question: string, correction: string, filePath: string, correctedByUserId: string, storageLabel: string): KnownBlock[] {
   const preview = correction.length > 300 ? correction.substring(0, 297) + '\u2026' : correction;
   const undoValue = JSON.stringify({ filePath, appendedText: correction });
   const safeUndoValue = undoValue.length > 1990 ? JSON.stringify({ filePath, appendedText: correction.substring(0, 500) + '\u2026' }) : undoValue;
   return [
     { type: 'section', text: { type: 'mrkdwn', text: '✏️ Correction saved to knowledge base by <@' + correctedByUserId + '>' } },
-    { type: 'context', elements: [{ type: 'mrkdwn', text: '*File:* `' + filePath + '` \u203a Team Additions' }] },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: storageLabel }] },
     { type: 'section', text: { type: 'mrkdwn', text: '```\n' + preview + '\n```' } },
     { type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: '\u21a9\ufe0f Undo', emoji: true }, action_id: 'kb_undo_add', value: safeUndoValue, style: 'danger' }] },
   ];

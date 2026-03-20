@@ -30,6 +30,15 @@ function resolveKBFilePath(question: string): string {
   return COMMON_KB_PATH;
 }
 
+function resolveStorageLabel(filePath: string): string {
+  if (filePath.endsWith('common.md')) return '📚 *Common KB* — applies to all properties';
+  const propertyMap = loadPropertyMap();
+  const fileName = (filePath.split('/').pop() ?? '').replace('.md', '');
+  const entry = propertyMap.properties.find((p) => p.code === fileName);
+  if (entry) return '📍 *' + (entry.names[1] ?? entry.address) + '* — Team Additions';
+  return '📍 `' + filePath + '` › Team Additions';
+}
+
 function stripMention(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/g, '').trim();
 }
@@ -136,15 +145,17 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
      let question = '', channelId = kbChannelId, threadTs = '', messageTs = '';
      try { const m = JSON.parse(view.private_metadata) as { question?: string; channelId?: string; threadTs?: string; messageTs?: string }; question = m.question ?? ''; channelId = m.channelId ?? kbChannelId; threadTs = m.threadTs ?? ''; messageTs = m.messageTs ?? ''; }
      catch { console.error('[KB-ASSISTANT] kb_add_answer_modal: failed to parse private_metadata'); }
-     try {
-       const filePath = resolveKBFilePath(question);
-       const formattedEntry = await formatKBEntry(question, answerText);
-       const appendResult = await appendToKB(filePath, formattedEntry);
-       if (messageTs && channelId) {
-         try { await client.chat.delete({ channel: channelId, ts: messageTs }); } catch { /* ignore */ }
-       }
-       await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, blocks: buildKBAddedConfirmBlocks(question, filePath, appendResult.appendedText), text: '\u2705 Added to knowledge base!' });
-       console.log('[KB-ASSISTANT] Answer added to ' + filePath + ' by ' + userId);
+      try {
+        let filePath = resolveKBFilePath(question);
+        const { entry: formattedEntry, appliesToAll } = await formatKBEntry(question, answerText);
+        if (appliesToAll) filePath = COMMON_KB_PATH;
+        const appendResult = await appendToKB(filePath, formattedEntry);
+        if (messageTs && channelId) {
+          try { await client.chat.delete({ channel: channelId, ts: messageTs }); } catch { /* ignore */ }
+        }
+        const storageLabel = resolveStorageLabel(filePath);
+        await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, blocks: buildKBAddedConfirmBlocks(question, filePath, appendResult.appendedText, storageLabel), text: '\u2705 Added to knowledge base!' });
+        console.log('[KB-ASSISTANT] Answer added to ' + filePath + ' by ' + userId);
      } catch (error) {
        console.error('[KB-ASSISTANT] kb_add_answer_modal error:', error);
        try {
@@ -230,21 +241,23 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
        const m = JSON.parse(view.private_metadata) as { question?: string; originalAnswer?: string; channelId?: string; messageTs?: string; filePath?: string };
        question = m.question ?? ''; originalAnswer = m.originalAnswer ?? ''; channelId = m.channelId ?? kbChannelId; messageTs = m.messageTs ?? ''; filePath = m.filePath ?? COMMON_KB_PATH;
      } catch { console.error('[KB-ASSISTANT] kb_correction_modal: failed to parse private_metadata'); }
-     try {
-       const formattedEntry = await formatKBEntry(question, correctionText);
-       const appendResult = await appendToKB(filePath, formattedEntry);
-       recordFeedback({ type: 'incorrect', question, aiAnswer: originalAnswer, correction: correctionText, filePath, userId }).catch((e) =>
-         console.error('[KB-ASSISTANT] kb_correction_modal: feedback write failed:', e)
-       );
-       if (channelId && messageTs) {
-         await client.chat.update({
-           channel: channelId,
-           ts: messageTs,
-           blocks: buildKBCorrectedBlocks(question, appendResult.appendedText, filePath, userId),
-           text: '✏️ Correction saved',
-         });
-       }
-       console.log('[KB-ASSISTANT] Correction saved to ' + filePath + ' by ' + userId);
+      try {
+        const { entry: formattedEntry, appliesToAll } = await formatKBEntry(question, correctionText);
+        if (appliesToAll) filePath = COMMON_KB_PATH;
+        const appendResult = await appendToKB(filePath, formattedEntry);
+        recordFeedback({ type: 'incorrect', question, aiAnswer: originalAnswer, correction: correctionText, filePath, userId }).catch((e) =>
+          console.error('[KB-ASSISTANT] kb_correction_modal: feedback write failed:', e)
+        );
+        const storageLabel = resolveStorageLabel(filePath);
+        if (channelId && messageTs) {
+          await client.chat.update({
+            channel: channelId,
+            ts: messageTs,
+            blocks: buildKBCorrectedBlocks(question, appendResult.appendedText, filePath, userId, storageLabel),
+            text: '✏️ Correction saved',
+          });
+        }
+        console.log('[KB-ASSISTANT] Correction saved to ' + filePath + ' by ' + userId);
      } catch (error) {
        console.error('[KB-ASSISTANT] kb_correction_modal error:', error);
        try {

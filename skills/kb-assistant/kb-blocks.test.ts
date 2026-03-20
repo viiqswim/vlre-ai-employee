@@ -96,12 +96,12 @@ describe('buildKBAddAnswerModal', () => {
 
 describe('buildKBAddedConfirmBlocks', () => {
   test('contains undo button with kb_undo_add action_id', () => {
-    const str = JSON.stringify(buildKBAddedConfirmBlocks('Q', 'knowledge-base/common.md', '### Entry\nText\n'));
+    const str = JSON.stringify(buildKBAddedConfirmBlocks('Q', 'knowledge-base/common.md', '### Entry\nText\n', '📚 *Common KB* — applies to all properties'));
     expect(str).toContain('kb_undo_add');
   });
 
   test('undo button value contains filePath', () => {
-    const blocks = buildKBAddedConfirmBlocks('Q', 'knowledge-base/common.md', '### Entry\nText\n');
+    const blocks = buildKBAddedConfirmBlocks('Q', 'knowledge-base/common.md', '### Entry\nText\n', '📚 *Common KB* — applies to all properties');
     const actionsBlock = blocks.find((b) => b.type === 'actions');
     const elements = (actionsBlock as { elements: Array<{ value?: string }> }).elements;
     const val = JSON.parse(elements[0]?.value ?? '{}') as { filePath: string };
@@ -127,7 +127,7 @@ describe('buildKBConfirmedBlocks', () => {
 
 describe('buildKBCorrectedBlocks', () => {
   test('has undo button with action_id kb_undo_add', () => {
-    const blocks = buildKBCorrectedBlocks('Q?', 'Correct answer here.', 'knowledge-base/common.md', 'U99999');
+    const blocks = buildKBCorrectedBlocks('Q?', 'Correct answer here.', 'knowledge-base/common.md', 'U99999', '📚 *Common KB* — applies to all properties');
     const str = JSON.stringify(blocks);
     expect(str).toContain('kb_undo_add');
     expect(str).toContain('Correction saved');
