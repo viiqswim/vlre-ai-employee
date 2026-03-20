@@ -7,6 +7,13 @@ import { createMultiPropertyKBReader } from '../skills/kb-reader/index.ts';
 import { createThreadTracker } from '../skills/thread-tracker/index.ts';
 import { startWebhookReceiver } from './webhook-receiver.ts';
 import { processWebhookMessage } from '../skills/pipeline/index.ts';
+import { Client } from '@notionhq/client';
+import { loadNotionConfig } from '../skills/notion-sync/config.js';
+import { createNotionDB } from '../skills/notion-search/db.js';
+import { createEmbedder } from '../skills/notion-search/embedder.js';
+import { createNotionSync } from '../skills/notion-sync/notion-sync.js';
+import { createNotionSearcher, type NotionSearcher } from '../skills/notion-search/notion-search.js';
+import { startNotionSyncScheduler } from '../skills/notion-sync/scheduler.js';
 
 const BOT_NAME = process.env['BOT_NAME'] ?? 'Papi Chulo';
 
@@ -21,16 +28,65 @@ async function main(): Promise<void> {
   );
   const threadTracker = createThreadTracker();
 
+  // --- Notion Integration (optional, non-blocking) ---
+  let notionSearch: NotionSearcher | undefined;
+  let stopNotionScheduler: (() => void) | undefined;
+  let closeNotionDB: (() => void) | undefined;
+
+  const notionConfig = loadNotionConfig();
+  if (notionConfig.token !== null) {
+    try {
+      const notionClient = new Client({ auth: notionConfig.token, notionVersion: '2026-03-11' });
+      const db = createNotionDB(notionConfig.dbPath);
+      closeNotionDB = () => { db.close(); };
+
+      // Initialize embedding model asynchronously (downloads ~80MB on first run, cached after).
+      // Model loading is intentionally non-blocking — the service starts accepting webhooks
+      // immediately. Once loaded, notionSearch becomes available for all subsequent requests.
+      void createEmbedder()
+        .then((embedder) => {
+          const sync = createNotionSync(notionClient, db, embedder, notionConfig);
+          notionSearch = createNotionSearcher(db, embedder, {
+            topK: notionConfig.topK,
+            maxContextChars: notionConfig.maxContextChars,
+          });
+          const { stop } = startNotionSyncScheduler(sync, notionConfig.syncIntervalHours);
+          stopNotionScheduler = stop;
+          console.log('[NOTION] Notion search integration ready');
+        })
+        .catch((err: unknown) => {
+          console.error('[NOTION] Failed to initialize embedding model:', (err as Error).message);
+          console.warn('[NOTION] Running without Notion search');
+        });
+    } catch (err) {
+      console.error('[NOTION] Initialization failed:', (err as Error).message);
+      console.warn('[NOTION] Running without Notion integration');
+    }
+  }
+  // --- End Notion Integration ---
+
   const slackApp = createSlackApp();
   registerAllHandlers(slackApp, hostfullyClient, threadTracker);
-  registerKBAssistantHandlers(slackApp, kbReader);
+  // Note: notionSearch may be undefined during model load (~30s first run, <1s cached)
+  // registerKBAssistantHandlers captures notionSearch by value at registration time.
+  // For KB assistant: Notion context available once model loads AND bot is @mentioned.
+  registerKBAssistantHandlers(slackApp, kbReader, notionSearch);
   await startSlackApp(slackApp);
 
   const slackChannelId = process.env['SLACK_CHANNEL_ID'] ?? '';
   startScheduler(slackApp, slackChannelId);
   await checkMissedRun(slackApp, slackChannelId);
 
-  const pipelineContext = { hostfullyClient, kbReader, slackApp, slackChannelId, threadTracker };
+  // pipelineContext uses a getter so processWebhookMessage reads the CURRENT value of
+  // notionSearch at call time (not the value at context creation time).
+  const pipelineContext = {
+    hostfullyClient,
+    kbReader,
+    slackApp,
+    slackChannelId,
+    threadTracker,
+    get notionSearch() { return notionSearch; },
+  };
 
   startWebhookReceiver((payload) => processWebhookMessage(payload, pipelineContext));
 
@@ -38,13 +94,15 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     console.log(`\n[${BOT_NAME}] ${signal} received — shutting down gracefully`);
+    stopNotionScheduler?.();
+    closeNotionDB?.();
     stopScheduler();
     await stopSlackApp(slackApp);
     process.exit(0);
   };
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => { void shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
 }
 
 main().catch((err) => {
