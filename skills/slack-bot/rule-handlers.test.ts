@@ -48,6 +48,7 @@ function buildMockApp(): {
   postMessageCalls: Array<{ channel: string; text: string }>;
   chatUpdateCalls: Array<{ channel: string; ts: string; blocks?: unknown; text: string }>;
   viewsOpenCalls: Array<{ trigger_id: string; view: unknown }>;
+  postEphemeralCalls: Array<{ channel: string; user: string; text: string }>;
   client: unknown;
 } {
   const actionHandlers = new Map<
@@ -61,6 +62,7 @@ function buildMockApp(): {
   const postMessageCalls: Array<{ channel: string; text: string }> = [];
   const chatUpdateCalls: Array<{ channel: string; ts: string; blocks?: unknown; text: string }> = [];
   const viewsOpenCalls: Array<{ trigger_id: string; view: unknown }> = [];
+  const postEphemeralCalls: Array<{ channel: string; user: string; text: string }> = [];
 
   const client = {
     chat: {
@@ -70,6 +72,10 @@ function buildMockApp(): {
       },
       update: async (params: { channel: string; ts: string; blocks?: unknown; text: string }) => {
         chatUpdateCalls.push(params);
+        return { ok: true };
+      },
+      postEphemeral: async (params: { channel: string; user: string; text: string }) => {
+        postEphemeralCalls.push(params);
         return { ok: true };
       },
     },
@@ -96,7 +102,7 @@ function buildMockApp(): {
     },
   } as unknown as App;
 
-  return { app, actionHandlers, viewHandlers, postMessageCalls, chatUpdateCalls, viewsOpenCalls, client: client as unknown };
+  return { app, actionHandlers, viewHandlers, postMessageCalls, chatUpdateCalls, viewsOpenCalls, postEphemeralCalls, client: client as unknown };
 }
 
 beforeEach(() => {
@@ -288,4 +294,122 @@ test('reject_rule: sets rule status to rejected', async () => {
   const rules = loadRules();
   const updated = rules.find((r) => r.id === 'rule-rej-1');
   expect(updated?.status).toBe('rejected');
+});
+
+test('refine_rule: opens modal with refine_rule_modal callback_id and sets rule to pending_refinement', async () => {
+  const rule = makeRule({ id: 'rule-refine-1', status: 'proposed' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers, viewsOpenCalls, client } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('refine_rule')!;
+  expect(handler).toBeDefined();
+
+  const ack = (async () => {}) as AckFn;
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-refine-1' }) }],
+    user: { id: 'U123' },
+    trigger_id: 'trigger-abc-123',
+    channel: { id: 'C999' },
+    message: { ts: '1234567890.000', blocks: [] },
+  };
+
+  await handler({ ack, body, client });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-refine-1');
+
+  expect(viewsOpenCalls.length).toBe(1);
+  const openCall = viewsOpenCalls[0]!;
+  expect(openCall.trigger_id).toBe('trigger-abc-123');
+  const view = openCall.view as { callback_id?: string };
+  expect(view.callback_id).toBe('refine_rule_modal');
+  expect(updated?.status).toBe('pending_refinement');
+});
+
+test('refine_rule: non-existent rule — views.open NOT called', async () => {
+  const { app, actionHandlers, viewsOpenCalls, client } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('refine_rule')!;
+  expect(handler).toBeDefined();
+
+  const ack = (async () => {}) as AckFn;
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'nonexistent-rule-xyz' }) }],
+    user: { id: 'U123' },
+    trigger_id: 'trigger-xyz',
+    channel: { id: 'C999' },
+    message: { ts: '1234567890.000', blocks: [] },
+  };
+
+  await handler({ ack, body, client });
+
+  expect(viewsOpenCalls.length).toBe(0);
+});
+
+test('accept_refined_rule: confirms rule and calls chat.update', async () => {
+  const rule = makeRule({ id: 'rule-accept-refined-1', status: 'pending_refinement' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers, chatUpdateCalls, client } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('accept_refined_rule')!;
+  expect(handler).toBeDefined();
+
+  const ack = (async () => {}) as AckFn;
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-accept-refined-1' }) }],
+    user: { id: 'U123' },
+    channel: { id: 'C999' },
+    message: { ts: '1234567890.000', blocks: [] },
+  };
+
+  await handler({ ack, body, client });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-accept-refined-1');
+
+  expect(updated?.status).toBe('confirmed');
+  expect(updated?.confirmedAt).toBeDefined();
+  expect(chatUpdateCalls.length).toBe(1);
+});
+
+test('reject_refined_rule: rejects rule and calls chat.update', async () => {
+  const rule = makeRule({ id: 'rule-reject-refined-1', status: 'pending_refinement' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers, chatUpdateCalls, client } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('reject_refined_rule')!;
+  expect(handler).toBeDefined();
+
+  const ack = (async () => {}) as AckFn;
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-reject-refined-1' }) }],
+    user: { id: 'U123' },
+    channel: { id: 'C999' },
+    message: { ts: '1234567890.000', blocks: [] },
+  };
+
+  await handler({ ack, body, client });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-reject-refined-1');
+
+  expect(updated?.status).toBe('rejected');
+  expect(chatUpdateCalls.length).toBe(1);
 });

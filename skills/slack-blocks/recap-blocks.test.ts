@@ -5,7 +5,10 @@ import {
   buildRuleActionedRecapBlocks,
   buildAddRuleModal,
   buildRemoveRuleModal,
+  buildRefineRuleModal,
+  buildRefinedRuleReviewBlocks,
 } from './recap-blocks';
+import { buildRuleNotificationBlocks } from './notification-blocks';
 import type { WeeklyAnalysisResult } from '../pipeline/edit-analyzer';
 import type { LearnedRule } from '../pipeline/learned-rules';
 
@@ -416,5 +419,104 @@ test('buildWeeklyRecapBlocks returns KnownBlock array', () => {
   expect(blocks.length).toBeGreaterThan(0);
   for (const block of blocks) {
     expect(typeof block.type).toBe('string');
+  }
+});
+
+test('buildRuleNotificationBlocks actions block has 3 elements with correct action_ids', () => {
+  const rule = makeRule();
+  const blocks = buildRuleNotificationBlocks(rule);
+  const actionsBlock = blocks.find(b => b.type === 'actions');
+  expect(actionsBlock).toBeDefined();
+  if (actionsBlock?.type === 'actions') {
+    expect(actionsBlock.elements.length).toBe(3);
+    const actionIds = actionsBlock.elements.map(e => ('action_id' in e ? e.action_id : ''));
+    expect(actionIds).toContain('approve_rule');
+    expect(actionIds).toContain('refine_rule');
+    expect(actionIds).toContain('reject_rule');
+  }
+});
+
+test('buildRuleNotificationBlocks buttons have correct styles: primary, none, danger', () => {
+  const rule = makeRule();
+  const blocks = buildRuleNotificationBlocks(rule);
+  const actionsBlock = blocks.find(b => b.type === 'actions');
+  expect(actionsBlock).toBeDefined();
+  if (actionsBlock?.type === 'actions') {
+    const elements = actionsBlock.elements;
+    expect((elements[0] as { style?: string }).style).toBe('primary');
+    expect((elements[1] as { style?: string }).style).toBeUndefined();
+    expect((elements[2] as { style?: string }).style).toBe('danger');
+  }
+});
+
+test('buildWeeklyRecapBlocks with 1 proposed rule has 3-button actions block (approve/refine/reject)', () => {
+  const rule = makeRule({ id: 'rule-refine-test' });
+  const result = makeResult({ newProposedRules: [rule] });
+  const blocks = buildWeeklyRecapBlocks(result, [], []);
+
+  const ruleActionsBlocks = blocks.filter(b => {
+    if (b.type !== 'actions') return false;
+    return (b.elements ?? []).some(
+      e => 'action_id' in e && (e.action_id === 'approve_rule' || e.action_id === 'reject_rule' || e.action_id === 'refine_rule'),
+    );
+  });
+
+  expect(ruleActionsBlocks.length).toBe(1);
+  const ruleBlock = ruleActionsBlocks[0];
+  if (ruleBlock?.type === 'actions') {
+    expect(ruleBlock.elements.length).toBe(3);
+    const actionIds = ruleBlock.elements.map(e => ('action_id' in e ? e.action_id : ''));
+    expect(actionIds).toContain('approve_rule');
+    expect(actionIds).toContain('refine_rule');
+    expect(actionIds).toContain('reject_rule');
+  }
+});
+
+test('buildRefineRuleModal callback_id, private_metadata, and block_ids', () => {
+  type RefineModal = {
+    callback_id: string;
+    private_metadata: string;
+    blocks: Array<{ type: string; block_id?: string; element?: { initial_value?: string } }>;
+  };
+  const rule = makeRule({ id: 'rule-refine-modal-test', correction: 'Answer directly without Hi/Hey' });
+  const modal = buildRefineRuleModal(rule) as RefineModal;
+
+  expect(modal.callback_id).toBe('refine_rule_modal');
+
+  const metadata = JSON.parse(modal.private_metadata) as { ruleId?: string };
+  expect(metadata.ruleId).toBe(rule.id);
+
+  expect(Array.isArray(modal.blocks)).toBe(true);
+  expect(modal.blocks.length).toBe(2);
+
+  const blockIds = modal.blocks.map(b => b.block_id);
+  expect(blockIds).toContain('rule_text_block');
+  expect(blockIds).toContain('conditions_block');
+
+  const firstBlock = modal.blocks.find(b => b.block_id === 'rule_text_block');
+  expect(firstBlock?.element?.initial_value).toBe(rule.correction);
+});
+
+test('buildRefinedRuleReviewBlocks last block is 2-button actions with accept/reject action_ids and correct styles', () => {
+  const original = { pattern: 'AI adds greeting', correction: 'Answer directly' };
+  const rewritten = { pattern: 'AI starts with Hi', correction: 'Skip salutations entirely' };
+  const blocks = buildRefinedRuleReviewBlocks(original, rewritten, 'Only on weekday mornings', 'U123', 'rule-rfr-1');
+
+  expect(Array.isArray(blocks)).toBe(true);
+  expect(blocks.length).toBeGreaterThan(0);
+
+  const lastBlock = blocks[blocks.length - 1]!;
+  expect(lastBlock.type).toBe('actions');
+
+  if (lastBlock.type === 'actions') {
+    expect(lastBlock.elements.length).toBe(2);
+    const actionIds = lastBlock.elements.map(e => ('action_id' in e ? e.action_id : ''));
+    expect(actionIds).toContain('accept_refined_rule');
+    expect(actionIds).toContain('reject_refined_rule');
+
+    const firstEl = lastBlock.elements[0] as { style?: string };
+    expect(firstEl.style).toBe('primary');
+    const secondEl = lastBlock.elements[1] as { style?: string };
+    expect(secondEl.style).toBe('danger');
   }
 });
