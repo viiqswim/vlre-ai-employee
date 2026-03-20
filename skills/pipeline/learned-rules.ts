@@ -10,10 +10,11 @@ export interface LearnedRule {
     edited: string;
   }>;
   frequency: number;
-  status: 'proposed' | 'confirmed' | 'rejected';
+  status: 'proposed' | 'confirmed' | 'rejected' | 'pending_refinement';
   createdAt: string;
   confirmedAt?: string;
   scope?: 'global' | string;
+  conditions?: string;
 }
 
 export interface LearnedRulesFile {

@@ -132,11 +132,11 @@ export async function analyzeEditInBackground(params: {
 }
 
 /**
- * Calls Claude with the diff analyzer prompt.
+ * Generic Claude API caller supporting both proxy and API modes.
  * Supports both proxy mode (CLAUDE_MODE=proxy) and API mode (CLAUDE_MODE=api).
  * Returns the raw response text or null on failure.
  */
-async function callDiffAnalyzer(userMessage: string): Promise<string | null> {
+export async function callClaude(systemPrompt: string, userMessage: string): Promise<string | null> {
   const mode = process.env['CLAUDE_MODE'] ?? 'api';
   const model = process.env['CLAUDE_MODEL'] ?? 'claude-3-5-sonnet-20241022';
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
@@ -151,7 +151,7 @@ async function callDiffAnalyzer(userMessage: string): Promise<string | null> {
           model,
           max_tokens: 512,
           messages: [
-            { role: 'system', content: DIFF_ANALYZER_PROMPT },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: userMessage },
           ],
         }),
@@ -179,7 +179,7 @@ async function callDiffAnalyzer(userMessage: string): Promise<string | null> {
         body: JSON.stringify({
           model,
           max_tokens: 512,
-          system: DIFF_ANALYZER_PROMPT,
+          system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
         signal: AbortSignal.timeout(timeoutMs),
@@ -195,4 +195,12 @@ async function callDiffAnalyzer(userMessage: string): Promise<string | null> {
     console.error('[ANALYZER] Claude call failed:', err instanceof Error ? err.message : String(err));
     return null;
   }
+}
+
+/**
+ * Calls Claude with the diff analyzer prompt.
+ * Returns the raw response text or null on failure.
+ */
+async function callDiffAnalyzer(userMessage: string): Promise<string | null> {
+  return callClaude(DIFF_ANALYZER_PROMPT, userMessage);
 }
