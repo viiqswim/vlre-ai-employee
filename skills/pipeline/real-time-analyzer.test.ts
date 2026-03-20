@@ -1,0 +1,170 @@
+import { describe, test, expect, mock, beforeEach, beforeAll } from 'bun:test';
+import type { LearnedRule } from './learned-rules.ts';
+import type { AnalysisResult } from './real-time-analyzer.ts';
+
+const mockAddRule = mock(async (_rule: LearnedRule) => {});
+const mockUpdateRule = mock(async (_id: string, _update: Partial<LearnedRule>) => ({} as LearnedRule));
+const mockInvalidateCache = mock(() => {});
+const mockLoadRules = mock(() => [] as LearnedRule[]);
+const mockGetConfirmedRules = mock(() => [] as LearnedRule[]);
+
+// mock.module MUST be called before the module under test is imported in Bun
+mock.module('./rules-store.ts', () => ({
+  addRule: mockAddRule,
+  updateRule: mockUpdateRule,
+  invalidateCache: mockInvalidateCache,
+  loadRules: mockLoadRules,
+  getConfirmedRules: mockGetConfirmedRules,
+  saveRules: mock(async () => {}),
+}));
+
+// Dynamic import ensures the mock above is in effect when real-time-analyzer loads rules-store
+let analyzeEditInBackground: (params: {
+  originalDraft: string;
+  editedText: string;
+  propertyName: string;
+  onRuleCreated?: (rule: LearnedRule) => Promise<void>;
+}) => Promise<AnalysisResult>;
+
+beforeAll(async () => {
+  const mod = await import('./real-time-analyzer.ts');
+  analyzeEditInBackground = mod.analyzeEditInBackground;
+});
+
+const mockFetch = mock(async (_url: string, _opts?: RequestInit) => {
+  return new Response(
+    JSON.stringify({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            pattern: 'AI uses numbered lists',
+            correction: 'Write in flowing prose not numbered lists',
+            scope: 'global',
+            skip: false,
+            skipReason: null,
+          }),
+        },
+      ],
+    }),
+    { status: 200 },
+  );
+});
+
+beforeEach(() => {
+  mockAddRule.mockReset();
+  mockUpdateRule.mockReset();
+  mockInvalidateCache.mockReset();
+  mockLoadRules.mockReset();
+  mockGetConfirmedRules.mockReset();
+  global.fetch = mockFetch as unknown as typeof fetch;
+  process.env['CLAUDE_MODE'] = 'api';
+  process.env['ANTHROPIC_API_KEY'] = 'test-key';
+});
+
+describe('analyzeEditInBackground', () => {
+  test('skips trivial edits with <10% delta', async () => {
+    const result = await analyzeEditInBackground({
+      originalDraft: 'The wifi password is abc123',
+      editedText: 'The wifi password is abc1234',
+      propertyName: 'Test Property',
+    });
+    expect(result.skipped).toBe(true);
+    expect(result.ruleCreated).toBe(false);
+    expect(mockAddRule).not.toHaveBeenCalled();
+  });
+
+  test('skips empty originalDraft', async () => {
+    const result = await analyzeEditInBackground({
+      originalDraft: '',
+      editedText: 'Some edited text here',
+      propertyName: 'Test Property',
+    });
+    expect(result.skipped).toBe(true);
+    expect(result.ruleCreated).toBe(false);
+  });
+
+  test('skips empty editedText', async () => {
+    const result = await analyzeEditInBackground({
+      originalDraft: 'Some original draft text here',
+      editedText: '',
+      propertyName: 'Test Property',
+    });
+    expect(result.skipped).toBe(true);
+    expect(result.ruleCreated).toBe(false);
+  });
+
+  test('catches errors and returns error result without throwing', async () => {
+    mockAddRule.mockImplementation(async () => {
+      throw new Error('disk full');
+    });
+
+    const overrideFetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  pattern: 'Test pattern',
+                  correction: 'Test correction',
+                  scope: 'global',
+                  skip: false,
+                }),
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    );
+    global.fetch = overrideFetch as unknown as typeof fetch;
+
+    const original = 'WiFi info at the property.';
+    const edited =
+      'WiFi is GuestNetwork, password abc123. Router is in the living room closet if you need to restart it.';
+    const result = await analyzeEditInBackground({
+      originalDraft: original,
+      editedText: edited,
+      propertyName: 'Test Property',
+    });
+
+    expect(result.ruleCreated).toBe(false);
+    expect(result.error).toBeDefined();
+    global.fetch = mockFetch as unknown as typeof fetch;
+  });
+
+  test('handles DUPLICATE_PATTERN by updating frequency', async () => {
+    const existingRule: LearnedRule = {
+      id: 'existing-rule-1',
+      pattern: 'AI uses numbered lists',
+      correction: 'Write in flowing prose not numbered lists',
+      examples: [],
+      frequency: 2,
+      status: 'confirmed',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      scope: 'global',
+    };
+
+    mockAddRule.mockImplementation(async () => {
+      throw new Error('DUPLICATE_PATTERN');
+    });
+    mockLoadRules.mockReturnValue([existingRule]);
+    mockUpdateRule.mockImplementation(async (_id: string, update: Partial<LearnedRule>) => ({
+      ...existingRule,
+      ...update,
+    }));
+
+    const original = '1. WiFi: GuestNet\n2. Code: 4829\n3. Park: driveway';
+    const edited = 'WiFi is GuestNet and password is abc123. Door code 4829. Parking is in the driveway.';
+    const result = await analyzeEditInBackground({
+      originalDraft: original,
+      editedText: edited,
+      propertyName: 'Test Property',
+    });
+
+    expect(mockUpdateRule).toHaveBeenCalledWith(existingRule.id, expect.objectContaining({ frequency: 3 }));
+    expect(mockInvalidateCache).toHaveBeenCalled();
+    expect(result.error).toBeUndefined();
+  });
+});
