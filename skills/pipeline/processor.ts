@@ -164,9 +164,20 @@ Confidence guidelines:
 console.log(`[PIPELINE] Loaded ${getConfirmedRules().length} learned rule(s) from CS team feedback`);
 
 /** Build a prompt section from confirmed learned rules. Returns '' if no rules. */
-export function buildLearnedRulesPrompt(rules: LearnedRule[]): string {
-  if (rules.length === 0) return '';
-  const ruleLines = rules.map((r, i) => `${i + 1}. ${r.correction} (observed in ${r.frequency} CS team edits)`);
+export function buildLearnedRulesPrompt(rules: LearnedRule[], propertyName?: string): string {
+  // Filter by scope: include global rules + property-specific rules matching this property
+  const filtered = rules.filter((r) => {
+    const scope = r.scope ?? 'global';
+    return scope === 'global' || scope === propertyName;
+  });
+  if (filtered.length === 0) return '';
+  const ruleLines = filtered.map((r, i) => {
+    const scope = r.scope ?? 'global';
+    const label = scope === 'global'
+      ? `(observed in ${r.frequency} CS team edits)`
+      : `(for ${scope})`;
+    return `${i + 1}. ${r.correction} ${label}`;
+  });
   return `\n\nLEARNED RULES FROM CS TEAM FEEDBACK:\nThe following rules were learned from how the CS team edits your responses. Follow these strictly:\n${ruleLines.join('\n')}`;
 }
 
@@ -258,7 +269,7 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
    const userMessage = buildUserMessage(params);
-   const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(getConfirmedRules());
+    const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(getConfirmedRules(), params.propertyName);
 
   let responseText = '';
   let useApiMode = mode !== 'proxy';
