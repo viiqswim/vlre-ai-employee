@@ -67,10 +67,15 @@ async function main(): Promise<void> {
 
   const slackApp = createSlackApp();
   registerAllHandlers(slackApp, hostfullyClient, threadTracker);
-  // Note: notionSearch may be undefined during model load (~30s first run, <1s cached)
-  // registerKBAssistantHandlers captures notionSearch by value at registration time.
-  // For KB assistant: Notion context available once model loads AND bot is @mentioned.
-  registerKBAssistantHandlers(slackApp, kbReader, notionSearch);
+  // Use a proxy so the KB assistant always reads the CURRENT notionSearch value at call time.
+  // This ensures Notion context is available once the model finishes loading, even though
+  // registerKBAssistantHandlers is called before createEmbedder() resolves.
+  const notionSearchProxy = {
+    search: async (query: string) => notionSearch ? notionSearch.search(query) : Promise.resolve([]),
+    formatAsContext: (results: import('../skills/notion-search/notion-search.js').SearchResult[]) =>
+      notionSearch ? notionSearch.formatAsContext(results) : '',
+  } as unknown as import('../skills/notion-search/notion-search.js').NotionSearcher;
+  registerKBAssistantHandlers(slackApp, kbReader, notionSearchProxy);
   await startSlackApp(slackApp);
 
   const slackChannelId = process.env['SLACK_CHANNEL_ID'] ?? '';

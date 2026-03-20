@@ -39,8 +39,6 @@ export function chunkMarkdown(
     const match = line.match(headerRegex);
 
     if (match) {
-      // Found a new header (H2 or H3)
-      const level = match[1]; // "##" or "###"
       const headingText = (match[2] ?? "").trim();
 
       // Save the previous section if it has content
