@@ -89,7 +89,7 @@ graph LR
 | 5 | Claude returns JSON: `{pattern, correction, scope, skip, skipReason}`. If `skip: true`, no rule is created |
 | 6 | A `LearnedRule` is created with `status: 'confirmed'` (bypassing the `proposed` state) and passed to the `onRuleCreated` callback |
 | 7 | `addRule()` in `skills/pipeline/rules-store.ts` saves the rule to `data/learned-rules.json`. If the same pattern already exists, it throws `DUPLICATE_PATTERN` and the caller increments `frequency` instead |
-| 8 | `buildRuleNotificationBlocks()` in `skills/slack-blocks/notification-blocks.ts` builds a Block Kit notification with a Reject button (`action_id: 'reject_rule'`), posted to `SLACK_CHANNEL_ID` |
+| 8 | `buildRuleNotificationBlocks()` in `skills/slack-blocks/notification-blocks.ts` builds a Block Kit notification with three buttons — Accept (`approve_rule`, primary), Refine (`refine_rule`), and Reject (`reject_rule`, danger) — posted to `SLACK_CHANNEL_ID`. See `docs/2026-03-20-1455-rule-refinement.md` for the Refine flow |
 
 ---
 
@@ -170,8 +170,15 @@ stateDiagram-v2
 
     proposed --> confirmed : CS team confirms
     proposed --> rejected : CS team rejects
+    proposed --> pending_refinement : CS team clicks Refine
 
     confirmed --> rejected : CS team clicks Reject in Slack
+    confirmed --> pending_refinement : CS team clicks Refine
+
+    pending_refinement --> confirmed : CS team accepts rewrite
+    pending_refinement --> rejected : CS team rejects rewrite
+    pending_refinement --> confirmed : Claude failure (revert)
+    pending_refinement --> proposed : Claude failure (revert)
 
     note right of confirmed
         Injected into SYSTEM_PROMPT
@@ -182,13 +189,19 @@ stateDiagram-v2
         Not yet injected.
         Awaiting CS review.
     end note
+
+    note right of pending_refinement
+        Suspended. Not injected.
+        Awaiting Claude rewrite.
+    end note
 ```
 
 | State | Description |
 |---|---|
 | `proposed` | Rule is awaiting CS review. Not injected into prompts. Created by the weekly recap flow or manual entry |
 | `confirmed` | Rule is active. Injected into the Claude system prompt on every pipeline run that matches its scope |
-| `rejected` | Rule is inactive. Never injected. Can be reached from either `proposed` or `confirmed` |
+| `rejected` | Rule is inactive. Never injected. Can be reached from `proposed`, `confirmed`, or after a rejected refinement |
+| `pending_refinement` | Rule is temporarily suspended while the CS team refines it. Not injected into prompts. Reverts to its prior status if Claude fails |
 | Bypass path | Rules created by `analyzeEditInBackground()` are auto-confirmed — they skip `proposed` entirely and are active immediately |
 
 ---
