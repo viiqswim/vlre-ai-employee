@@ -1,0 +1,202 @@
+import type { LearnedRule } from './learned-rules.js';
+import {
+  addRule,
+  updateRule,
+  getConfirmedRules,
+  invalidateCache,
+  loadRules,
+} from './rules-store.js';
+import { DIFF_ANALYZER_PROMPT } from './diff-analyzer-prompt.js';
+
+export interface AnalysisResult {
+  ruleCreated: boolean;
+  rule?: LearnedRule;
+  skipped: boolean;
+  error?: string;
+}
+
+interface DiffAnalysisResponse {
+  pattern: string;
+  correction: string;
+  scope: string;
+  skip: boolean;
+  skipReason?: string | null;
+}
+
+/**
+ * Analyzes an edit diff using Claude to detect generalizable patterns.
+ * Auto-confirms rules immediately. Never throws — all errors are caught and logged.
+ * Designed to be called fire-and-forget from the Slack edit handler.
+ */
+export async function analyzeEditInBackground(params: {
+  originalDraft: string;
+  editedText: string;
+  propertyName: string;
+  onRuleCreated?: (rule: LearnedRule) => Promise<void>;
+}): Promise<AnalysisResult> {
+  const { originalDraft, editedText, propertyName, onRuleCreated } = params;
+
+  try {
+    // Minimum edit delta check: skip trivial edits (less than 10% change)
+    const originalLen = Math.max(originalDraft.length, 1);
+    const deltaRatio = Math.abs(originalDraft.length - editedText.length) / originalLen;
+    
+    // Also check character-level similarity via simple ratio
+    if (deltaRatio < 0.10 && originalDraft.toLowerCase() !== editedText.toLowerCase()) {
+      // Check if content actually changed meaningfully (not just whitespace/case)
+      const stripped = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (stripped(originalDraft) === stripped(editedText)) {
+        console.log('[ANALYZER] Skipping trivial edit (only whitespace/case changes)');
+        return { ruleCreated: false, skipped: true };
+      }
+      // If delta < 10% but content is different, still skip
+      console.log(`[ANALYZER] Skipping trivial edit (deltaRatio=${deltaRatio.toFixed(3)} < 0.10)`);
+      return { ruleCreated: false, skipped: true };
+    }
+
+    if (!originalDraft.trim() || !editedText.trim()) {
+      console.log('[ANALYZER] Skipping: empty originalDraft or editedText');
+      return { ruleCreated: false, skipped: true };
+    }
+
+    // Call Claude to analyze the diff
+    const userMessage = `ORIGINAL:\n${originalDraft}\n\nEDITED:\n${editedText}\n\nPROPERTY: ${propertyName}`;
+    const analysisJson = await callDiffAnalyzer(userMessage);
+    
+    if (!analysisJson) {
+      return { ruleCreated: false, skipped: false, error: 'Claude returned empty response' };
+    }
+
+    let analysis: DiffAnalysisResponse;
+    try {
+      analysis = JSON.parse(analysisJson) as DiffAnalysisResponse;
+    } catch {
+      console.error('[ANALYZER] Failed to parse Claude response as JSON:', analysisJson.substring(0, 200));
+      return { ruleCreated: false, skipped: false, error: 'Failed to parse analysis JSON' };
+    }
+
+    if (analysis.skip) {
+      console.log(`[ANALYZER] Claude said skip: ${analysis.skipReason ?? 'no reason given'}`);
+      return { ruleCreated: false, skipped: true };
+    }
+
+    if (!analysis.pattern || !analysis.correction) {
+      console.log('[ANALYZER] Empty pattern or correction — skipping');
+      return { ruleCreated: false, skipped: true };
+    }
+
+    const scope = analysis.scope === propertyName ? propertyName : 'global';
+
+    const newRule: LearnedRule = {
+      id: `rule-${Date.now()}-realtime`,
+      pattern: analysis.pattern,
+      correction: analysis.correction,
+      examples: [
+        {
+          original: originalDraft.substring(0, 120),
+          edited: editedText.substring(0, 120),
+        },
+      ],
+      frequency: 1,
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+      confirmedAt: new Date().toISOString(),
+      scope,
+    };
+
+    try {
+      await addRule(newRule);
+      invalidateCache();
+      console.log(`[ANALYZER] Auto-confirmed new rule: "${newRule.pattern}" (scope: ${scope})`);
+
+      if (onRuleCreated) {
+        await onRuleCreated(newRule);
+      }
+
+      return { ruleCreated: true, rule: newRule, skipped: false };
+    } catch (err) {
+      if (err instanceof Error && err.message === 'DUPLICATE_PATTERN') {
+        // Find existing rule and increment frequency
+        const rules = loadRules();
+        const existing = rules.find((r) => r.pattern === analysis.pattern);
+        if (existing) {
+          const updated = await updateRule(existing.id, { frequency: (existing.frequency ?? 1) + 1 });
+          invalidateCache();
+          console.log(`[ANALYZER] Incremented frequency for existing rule: "${existing.pattern}" → frequency ${(existing.frequency ?? 1) + 1}`);
+          return { ruleCreated: false, rule: updated ?? existing, skipped: false };
+        }
+      }
+      throw err; // re-throw non-duplicate errors to outer catch
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[ANALYZER] Analysis failed: ${errorMsg}`);
+    return { ruleCreated: false, skipped: false, error: errorMsg };
+  }
+}
+
+/**
+ * Calls Claude with the diff analyzer prompt.
+ * Supports both proxy mode (CLAUDE_MODE=proxy) and API mode (CLAUDE_MODE=api).
+ * Returns the raw response text or null on failure.
+ */
+async function callDiffAnalyzer(userMessage: string): Promise<string | null> {
+  const mode = process.env['CLAUDE_MODE'] ?? 'api';
+  const model = process.env['CLAUDE_MODEL'] ?? 'claude-3-5-sonnet-20241022';
+  const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
+
+  try {
+    if (mode === 'proxy') {
+      const proxyUrl = process.env['CLAUDE_PROXY_URL'] ?? 'http://127.0.0.1:3456';
+      const response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          max_tokens: 512,
+          messages: [
+            { role: 'system', content: DIFF_ANALYZER_PROMPT },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) {
+        console.error(`[ANALYZER] Proxy request failed: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      return data.choices?.[0]?.message?.content?.trim() ?? null;
+    } else {
+      const apiKey = process.env['ANTHROPIC_API_KEY'];
+      if (!apiKey) {
+        console.error('[ANALYZER] ANTHROPIC_API_KEY not set');
+        return null;
+      }
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 512,
+          system: DIFF_ANALYZER_PROMPT,
+          messages: [{ role: 'user', content: userMessage }],
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) {
+        console.error(`[ANALYZER] API request failed: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      const data = (await response.json()) as { content?: Array<{ type: string; text?: string }> };
+      return data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+    }
+  } catch (err) {
+    console.error('[ANALYZER] Claude call failed:', err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
