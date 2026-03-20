@@ -119,11 +119,12 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
     await ack();
     const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
     const triggerId = (body as { trigger_id?: string }).trigger_id ?? '';
+    const messageTs = (body as { message?: { ts?: string } }).message?.ts ?? '';
     let question = '', threadTs = '';
     try { const p = JSON.parse(action?.value ?? '{}') as { question?: string; threadTs?: string }; question = p.question ?? ''; threadTs = p.threadTs ?? ''; }
     catch { console.error('[KB-ASSISTANT] kb_add_answer: failed to parse button value'); return; }
     const channelId = (body as { channel?: { id?: string } }).channel?.id ?? kbChannelId;
-    try { await client.views.open({ trigger_id: triggerId, view: buildKBAddAnswerModal(question, channelId, threadTs) as Parameters<typeof client.views.open>[0]['view'] }); }
+    try { await client.views.open({ trigger_id: triggerId, view: buildKBAddAnswerModal(question, channelId, threadTs, messageTs) as Parameters<typeof client.views.open>[0]['view'] }); }
     catch (error) { console.error('[KB-ASSISTANT] kb_add_answer: failed to open modal:', error); }
   });
 
@@ -132,13 +133,16 @@ export function registerKBAssistantHandlers(app: App, kbReader: MultiPropertyKBR
      if (!answerText) { await ack({ response_action: 'errors', errors: { answer_block: 'Please provide an answer before submitting.' } }); return; }
      await ack();
      const userId = body.user.id;
-     let question = '', channelId = kbChannelId, threadTs = '';
-     try { const m = JSON.parse(view.private_metadata) as { question?: string; channelId?: string; threadTs?: string }; question = m.question ?? ''; channelId = m.channelId ?? kbChannelId; threadTs = m.threadTs ?? ''; }
+     let question = '', channelId = kbChannelId, threadTs = '', messageTs = '';
+     try { const m = JSON.parse(view.private_metadata) as { question?: string; channelId?: string; threadTs?: string; messageTs?: string }; question = m.question ?? ''; channelId = m.channelId ?? kbChannelId; threadTs = m.threadTs ?? ''; messageTs = m.messageTs ?? ''; }
      catch { console.error('[KB-ASSISTANT] kb_add_answer_modal: failed to parse private_metadata'); }
      try {
        const filePath = resolveKBFilePath(question);
        const formattedEntry = await formatKBEntry(question, answerText);
        const appendResult = await appendToKB(filePath, formattedEntry);
+       if (messageTs && channelId) {
+         try { await client.chat.delete({ channel: channelId, ts: messageTs }); } catch { /* ignore */ }
+       }
        await client.chat.postMessage({ channel: channelId, thread_ts: threadTs || undefined, blocks: buildKBAddedConfirmBlocks(question, filePath, appendResult.appendedText), text: '\u2705 Added to knowledge base!' });
        console.log('[KB-ASSISTANT] Answer added to ' + filePath + ' by ' + userId);
      } catch (error) {

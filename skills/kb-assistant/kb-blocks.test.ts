@@ -76,19 +76,20 @@ describe('buildKBDontKnowBlocks', () => {
 
 describe('buildKBAddAnswerModal', () => {
   test('has correct callback_id', () => {
-    expect((buildKBAddAnswerModal('Q', 'C', 'ts') as { callback_id: string }).callback_id).toBe('kb_add_answer_modal');
+    expect((buildKBAddAnswerModal('Q', 'C', 'ts', 'msg-ts') as { callback_id: string }).callback_id).toBe('kb_add_answer_modal');
   });
 
-  test('private_metadata contains question, channelId, threadTs', () => {
-    const modal = buildKBAddAnswerModal('My Q', 'C123', 'ts-001') as { private_metadata: string };
-    const meta = JSON.parse(modal.private_metadata) as { question: string; channelId: string; threadTs: string };
+  test('private_metadata contains question, channelId, threadTs, messageTs', () => {
+    const modal = buildKBAddAnswerModal('My Q', 'C123', 'ts-001', 'msg-ts-001') as { private_metadata: string };
+    const meta = JSON.parse(modal.private_metadata) as { question: string; channelId: string; threadTs: string; messageTs: string };
     expect(meta.question).toBe('My Q');
     expect(meta.channelId).toBe('C123');
     expect(meta.threadTs).toBe('ts-001');
+    expect(meta.messageTs).toBe('msg-ts-001');
   });
 
   test('has answer_block input', () => {
-    const modal = buildKBAddAnswerModal('Q', 'C', 'ts') as { blocks: Array<{ block_id?: string }> };
+    const modal = buildKBAddAnswerModal('Q', 'C', 'ts', 'msg-ts') as { blocks: Array<{ block_id?: string }> };
     expect(modal.blocks.find((b) => b.block_id === 'answer_block')).toBeDefined();
   });
 });

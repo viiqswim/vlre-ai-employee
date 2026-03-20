@@ -50,12 +50,12 @@ export function buildKBDontKnowBlocks(question: string, threadTs: string, search
   return blocks;
 }
 
-export function buildKBAddAnswerModal(question: string, channelId: string, threadTs: string): object {
+export function buildKBAddAnswerModal(question: string, channelId: string, threadTs: string, messageTs: string): object {
   const q = question.length > 200 ? question.substring(0, 197) + '\u2026' : question;
   return {
     type: 'modal',
     callback_id: 'kb_add_answer_modal',
-    private_metadata: JSON.stringify({ question: q, channelId, threadTs }),
+    private_metadata: JSON.stringify({ question: q, channelId, threadTs, messageTs }),
     title: { type: 'plain_text', text: 'Add to Knowledge Base', emoji: true },
     submit: { type: 'plain_text', text: 'Add Answer', emoji: true },
     close: { type: 'plain_text', text: 'Cancel', emoji: true },
