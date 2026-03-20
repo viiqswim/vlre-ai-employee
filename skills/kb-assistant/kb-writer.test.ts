@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { appendToKB, undoAppend } from './kb-writer.js';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -42,6 +43,25 @@ describe('appendToKB', () => {
   test('lineStart is a positive integer', async () => {
     const result = await appendToKB(testFile, 'Some entry');
     expect(result.lineStart).toBeGreaterThan(0);
+  });
+
+  test('appendToKB: pre-formatted entry (starts with ###) does not get double heading', async () => {
+    const tmpFile = '/tmp/kb-writer-preformatted-test-' + Date.now() + '.md';
+    const preformattedEntry = '### Appliances — Washer Brand\nThe washer is a Samsung.\nKeywords: washer, lavadora';
+    const result = await appendToKB(tmpFile, preformattedEntry);
+    const content = readFileSync(tmpFile, 'utf-8');
+    expect(content).not.toContain('### ### ');
+    expect(content).toContain('### Appliances — Washer Brand');
+    expect(content).toContain('Samsung');
+    await unlink(tmpFile).catch(() => {});
+  });
+
+  test('appendToKB: plain entry (no ###) still gets auto heading', async () => {
+    const tmpFile = '/tmp/kb-writer-plain-test-' + Date.now() + '.md';
+    const result = await appendToKB(tmpFile, 'Samsung');
+    const content = readFileSync(tmpFile, 'utf-8');
+    expect(content).toContain('### Samsung');
+    await unlink(tmpFile).catch(() => {});
   });
 });
 

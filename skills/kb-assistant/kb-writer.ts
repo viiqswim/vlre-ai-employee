@@ -28,7 +28,11 @@ export async function appendToKB(filePath: string, entryText: string): Promise<K
   const existing = existsSync(filePath) ? readFileSync(filePath, 'utf-8') : '';
   const title = entryText.trim().substring(0, 60);
   const dateStr = new Date().toISOString().split('T')[0] ?? new Date().toISOString();
-  const entryBlock = '### ' + title + '\n' + entryText.trim() + '\n\n_Added via Slack on ' + dateStr + '_\n';
+  const trimmed = entryText.trim();
+  const isPreformatted = trimmed.startsWith('###');
+  const entryBlock = isPreformatted
+    ? trimmed + '\n\n_Added via Slack on ' + dateStr + '_\n'
+    : '### ' + title + '\n' + trimmed + '\n\n_Added via Slack on ' + dateStr + '_\n';
   let newContent: string;
   if (existing.includes(TEAM_ADDITIONS_HEADER)) {
     const headerIndex = existing.indexOf(TEAM_ADDITIONS_HEADER);
