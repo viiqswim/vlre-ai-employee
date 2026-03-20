@@ -11,6 +11,8 @@ import {
   buildEditModal,
   type PostActionContext,
 } from '../slack-blocks/blocks.ts';
+import { analyzeEditInBackground } from '../pipeline/real-time-analyzer.js';
+import { buildRuleNotificationBlocks } from '../slack-blocks/notification-blocks.js';
 
 interface ButtonMetadata {
   messageUid: string;
@@ -295,6 +297,31 @@ export function registerEditHandler(
         originalDraft: modalMetadata.draftResponse ?? '',
         editedText,
       });
+
+      const originalDraft = modalMetadata.draftResponse ?? '';
+      if (originalDraft.trim() && editedText.trim()) {
+        analyzeEditInBackground({
+          originalDraft,
+          editedText,
+          propertyName: modalMetadata.propertyName ?? '',
+          onRuleCreated: async (rule) => {
+            try {
+              const channelId = process.env['SLACK_CHANNEL_ID'] ?? '';
+              if (channelId) {
+                await client.chat.postMessage({
+                  channel: channelId,
+                  blocks: buildRuleNotificationBlocks(rule),
+                  text: `New rule learned: ${rule.correction}`,
+                });
+              }
+            } catch (notifyErr) {
+              console.error('[SLACK] Failed to post rule notification:', notifyErr instanceof Error ? notifyErr.message : String(notifyErr));
+            }
+          },
+        }).catch((err: unknown) => {
+          console.error('[SLACK] Background analysis failed:', err instanceof Error ? err.message : String(err));
+        });
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(`[SLACK] Edit: send failed: ${errorMsg}`);
