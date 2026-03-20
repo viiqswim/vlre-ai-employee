@@ -2,7 +2,6 @@ import type { LearnedRule } from './learned-rules.js';
 import {
   addRule,
   updateRule,
-  getConfirmedRules,
   invalidateCache,
   loadRules,
 } from './rules-store.js';
@@ -37,19 +36,16 @@ export async function analyzeEditInBackground(params: {
   const { originalDraft, editedText, propertyName, onRuleCreated } = params;
 
   try {
-    // Minimum edit delta check: skip trivial edits (less than 10% change)
+    // Skip trivial edits: normalize whitespace/case and compare; also skip if <10% length change
+    const stripped = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (stripped(originalDraft) === stripped(editedText)) {
+      console.log('[ANALYZER] Skipping trivial edit (only whitespace/case changes)');
+      return { ruleCreated: false, skipped: true };
+    }
+
     const originalLen = Math.max(originalDraft.length, 1);
     const deltaRatio = Math.abs(originalDraft.length - editedText.length) / originalLen;
-    
-    // Also check character-level similarity via simple ratio
-    if (deltaRatio < 0.10 && originalDraft.toLowerCase() !== editedText.toLowerCase()) {
-      // Check if content actually changed meaningfully (not just whitespace/case)
-      const stripped = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
-      if (stripped(originalDraft) === stripped(editedText)) {
-        console.log('[ANALYZER] Skipping trivial edit (only whitespace/case changes)');
-        return { ruleCreated: false, skipped: true };
-      }
-      // If delta < 10% but content is different, still skip
+    if (deltaRatio < 0.10) {
       console.log(`[ANALYZER] Skipping trivial edit (deltaRatio=${deltaRatio.toFixed(3)} < 0.10)`);
       return { ruleCreated: false, skipped: true };
     }
