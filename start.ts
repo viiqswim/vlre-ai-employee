@@ -132,17 +132,20 @@ if (process.env['CLAUDE_MODE'] === 'proxy') {
 }
 
 // Start Papi Chulo main process (foreground — blocks until Ctrl+C)
-// Use spawn with stdio:'inherit' so Bun writes directly to the terminal.
-// Without this, Bun detects stdout is a pipe (not a TTY) and buffers output,
-// making the terminal look frozen even though the service is running fine.
+const SERVICE_LOG = '/tmp/papi-chulo.log'
 console.log(`Starting ${BOT_NAME} main process...`)
+console.log(`Logs also written to: ${SERVICE_LOG}`)
+const serviceLogStream = fs.createWriteStream(SERVICE_LOG, { flags: 'w' })
 await new Promise<void>((resolve, reject) => {
   const child = spawn('bun', ['run', 'src/index.ts'], {
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
     env: process.env,
   })
+  child.stdout?.on('data', (chunk: Buffer) => { process.stdout.write(chunk); serviceLogStream.write(chunk); })
+  child.stderr?.on('data', (chunk: Buffer) => { process.stderr.write(chunk); serviceLogStream.write(chunk); })
   child.on('error', reject)
   child.on('exit', (code) => {
+    serviceLogStream.end()
     if (code !== 0 && code !== null) reject(new Error(`${BOT_NAME} exited with code ${code}`))
     else resolve()
   })
