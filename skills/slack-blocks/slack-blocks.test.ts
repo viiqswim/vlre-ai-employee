@@ -170,39 +170,39 @@ test('buildApprovedBlocks returns array with approval message', () => {
   const blocks = buildApprovedBlocks('U123456', 'Thanks for your message!', mockContext);
   expect(Array.isArray(blocks)).toBe(true);
   expect(blocks.length).toBeGreaterThan(0);
-  
-  const sectionBlock = blocks.find(b => b.type === 'section');
-  expect(sectionBlock).toBeDefined();
-  if (sectionBlock?.type === 'section') {
-    expect(sectionBlock.text?.text).toContain('✅');
-    expect(sectionBlock.text?.text).toContain('Approved');
-  }
+
+  const allSectionText = blocks
+    .filter(b => b.type === 'section')
+    .map(b => b.type === 'section' && b.text ? b.text.text : '')
+    .join(' ');
+  expect(allSectionText).toContain('✅');
+  expect(allSectionText).toContain('Approved');
 });
 
 test('buildRejectedBlocks returns array with rejection message', () => {
   const blocks = buildRejectedBlocks('U123456', mockContext);
   expect(Array.isArray(blocks)).toBe(true);
   expect(blocks.length).toBeGreaterThan(0);
-  
-  const sectionBlock = blocks.find(b => b.type === 'section');
-  expect(sectionBlock).toBeDefined();
-  if (sectionBlock?.type === 'section') {
-    expect(sectionBlock.text?.text).toContain('❌');
-    expect(sectionBlock.text?.text).toContain('Rejected');
-  }
+
+  const allSectionText = blocks
+    .filter(b => b.type === 'section')
+    .map(b => b.type === 'section' && b.text ? b.text.text : '')
+    .join(' ');
+  expect(allSectionText).toContain('❌');
+  expect(allSectionText).toContain('Rejected');
 });
 
 test('buildEditedBlocks returns array with edit message', () => {
   const blocks = buildEditedBlocks('U123456', 'Edited response text', mockContext);
   expect(Array.isArray(blocks)).toBe(true);
   expect(blocks.length).toBeGreaterThan(0);
-  
-  const sectionBlock = blocks.find(b => b.type === 'section');
-  expect(sectionBlock).toBeDefined();
-  if (sectionBlock?.type === 'section') {
-    expect(sectionBlock.text?.text).toContain('✏️');
-    expect(sectionBlock.text?.text).toContain('Edited and sent');
-  }
+
+  const allSectionText = blocks
+    .filter(b => b.type === 'section')
+    .map(b => b.type === 'section' && b.text ? b.text.text : '')
+    .join(' ');
+  expect(allSectionText).toContain('✏️');
+  expect(allSectionText).toContain('Edited and sent');
 });
 
 test('buildErrorBlocks returns array with error message', () => {
@@ -287,12 +287,11 @@ test('buildSupersededBlocks returns exactly one block', () => {
   expect(blocks.length).toBe(1);
 });
 
-test('buildApprovedBlocks with context contains guest name in context block', () => {
+test('buildApprovedBlocks contains guest name in section block', () => {
   const blocks = buildApprovedBlocks('U999', 'Great, confirmed!', mockContext);
   const allText = blocks
-    .filter(b => b.type === 'context')
-    .flatMap(b => b.type === 'context' ? (b.elements ?? []) : [])
-    .map(e => ('text' in e ? e.text : ''))
+    .filter(b => b.type === 'section')
+    .map(b => b.type === 'section' && b.text ? b.text.text : '')
     .join(' ');
   expect(allText).toContain('John Doe');
 });
@@ -309,12 +308,11 @@ test('buildApprovedBlocks with context contains Hostfully link', () => {
   expect(allText).toContain('lead-789');
 });
 
-test('buildRejectedBlocks with context contains property name', () => {
+test('buildRejectedBlocks contains property name in section block', () => {
   const blocks = buildRejectedBlocks('U999', mockContext);
   const allText = blocks
-    .filter(b => b.type === 'context')
-    .flatMap(b => b.type === 'context' ? (b.elements ?? []) : [])
-    .map(e => ('text' in e ? e.text : ''))
+    .filter(b => b.type === 'section')
+    .map(b => b.type === 'section' && b.text ? b.text.text : '')
     .join(' ');
   expect(allText).toContain('Downtown Loft');
 });

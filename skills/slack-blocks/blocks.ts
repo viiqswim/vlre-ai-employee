@@ -179,17 +179,11 @@ export function buildApprovedBlocks(
 ): KnownBlock[] {
   return [
     {
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
-        },
-      ],
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🏠 *${context.propertyName}*  |  *Guest:* ${context.guestName}  |  *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+      },
     },
     {
       type: 'section',
@@ -205,6 +199,10 @@ export function buildApprovedBlocks(
           type: 'mrkdwn',
           text: `*Sent:* ${sentResponse.substring(0, 200)}${sentResponse.length > 200 ? '…' : ''}`,
         },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
       ],
     },
   ];
@@ -216,17 +214,11 @@ export function buildApprovedBlocks(
 export function buildRejectedBlocks(rejectorUserId: string, context: PostActionContext): KnownBlock[] {
   return [
     {
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
-        },
-      ],
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🏠 *${context.propertyName}*  |  *Guest:* ${context.guestName}  |  *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+      },
     },
     {
       type: 'section',
@@ -234,6 +226,15 @@ export function buildRejectedBlocks(rejectorUserId: string, context: PostActionC
         type: 'mrkdwn',
         text: `❌ *Rejected* by <@${rejectorUserId}> — <!date^${Math.floor(Date.now() / 1000)}^{time}|just now>\n_Response will not be sent to the guest._`,
       },
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
+        },
+      ],
     },
   ];
 }
@@ -278,17 +279,11 @@ export function buildEditedBlocks(
 ): KnownBlock[] {
   return [
     {
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `*Guest:* ${context.guestName} | *Property:* ${context.propertyName} | *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
-        },
-      ],
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🏠 *${context.propertyName}*  |  *Guest:* ${context.guestName}  |  *Dates:* ${context.checkInDate} – ${context.checkOutDate}`,
+      },
     },
     {
       type: 'section',
@@ -303,6 +298,10 @@ export function buildEditedBlocks(
         {
           type: 'mrkdwn',
           text: `*Sent:* ${editedResponse.substring(0, 200)}${editedResponse.length > 200 ? '…' : ''}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `<https://platform.hostfully.com/app/#/inbox?threadUid=${context.threadUid}&leadUid=${context.leadUid}|🔗 View in Hostfully>`,
         },
       ],
     },
