@@ -106,6 +106,12 @@ export function buildWeeklyRecapBlocks(
         },
         {
           type: 'button',
+          text: { type: 'plain_text', text: '✏️ Refine', emoji: true },
+          action_id: 'refine_rule',
+          value: JSON.stringify({ ruleId: rule.id }),
+        },
+        {
+          type: 'button',
           text: { type: 'plain_text', text: '❌ Reject', emoji: true },
           style: 'danger',
           action_id: 'reject_rule',
@@ -261,4 +267,102 @@ export function buildRemoveRuleModal(confirmedRules: LearnedRule[]): object {
       },
     ],
   };
+}
+
+export function buildRefineRuleModal(rule: LearnedRule): object {
+  return {
+    type: 'modal',
+    callback_id: 'refine_rule_modal',
+    title: { type: 'plain_text', text: 'Refine Rule' },
+    submit: { type: 'plain_text', text: 'Refine Rule' },
+    close: { type: 'plain_text', text: 'Cancel' },
+    private_metadata: JSON.stringify({
+      ruleId: rule.id,
+      originalCorrection: rule.correction,
+      originalPattern: rule.pattern,
+      originalStatus: rule.status,
+    }),
+    blocks: [
+      {
+        type: 'input',
+        block_id: 'rule_text_block',
+        label: { type: 'plain_text', text: 'Rule (edit if needed)', emoji: true },
+        element: {
+          type: 'plain_text_input',
+          action_id: 'rule_text_input',
+          multiline: true,
+          initial_value: rule.correction,
+          placeholder: { type: 'plain_text', text: 'Edit the rule text if needed' },
+        },
+      },
+      {
+        type: 'input',
+        block_id: 'conditions_block',
+        label: { type: 'plain_text', text: 'Conditions / Exceptions', emoji: true },
+        optional: true,
+        element: {
+          type: 'plain_text_input',
+          action_id: 'conditions_input',
+          multiline: true,
+          placeholder: { type: 'plain_text', text: 'e.g., Only when no other check-ins/check-outs are happening in adjacent rooms' },
+        },
+      },
+    ],
+  };
+}
+
+export function buildRefinedRuleReviewBlocks(
+  original: { pattern: string; correction: string },
+  rewritten: { pattern: string; correction: string },
+  conditions: string,
+  refinedBy: string,
+  ruleId: string,
+): KnownBlock[] {
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `✏️ *Rule refined by <@${refinedBy}>*`,
+      },
+    },
+    {
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: `*Original:* _${original.correction}_` },
+      ],
+    },
+    {
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: `*Feedback:* _${conditions || 'No conditions provided'}_` },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Rewritten rule:* ${rewritten.correction}`,
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '✅ Accept', emoji: true },
+          style: 'primary',
+          action_id: 'accept_refined_rule',
+          value: JSON.stringify({ ruleId }),
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '❌ Reject', emoji: true },
+          style: 'danger',
+          action_id: 'reject_refined_rule',
+          value: JSON.stringify({ ruleId }),
+        },
+      ],
+    },
+  ];
 }

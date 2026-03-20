@@ -27,7 +27,20 @@ export function buildRuleNotificationBlocks(rule: LearnedRule): KnownBlock[] {
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: '❌ Reject This Rule', emoji: true },
+          text: { type: 'plain_text', text: '✅ Accept', emoji: true },
+          style: 'primary',
+          action_id: 'approve_rule',
+          value: JSON.stringify({ ruleId: rule.id }),
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '✏️ Refine', emoji: true },
+          action_id: 'refine_rule',
+          value: JSON.stringify({ ruleId: rule.id }),
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '❌ Reject', emoji: true },
           style: 'danger',
           action_id: 'reject_rule',
           value: JSON.stringify({ ruleId: rule.id }),
