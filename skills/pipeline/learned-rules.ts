@@ -13,6 +13,7 @@ export interface LearnedRule {
   status: 'proposed' | 'confirmed' | 'rejected';
   createdAt: string;
   confirmedAt?: string;
+  scope?: 'global' | string;
 }
 
 export interface LearnedRulesFile {
@@ -34,7 +35,9 @@ export function loadLearnedRules(filePath: string = 'data/learned-rules.json'): 
     if (!content.trim()) return [];
     const data = JSON.parse(content) as LearnedRulesFile;
     if (!Array.isArray(data.rules)) return [];
-    return data.rules.filter((r) => r.status === 'confirmed');
+    return data.rules
+      .filter((r) => r.status === 'confirmed')
+      .map((r) => ({ ...r, scope: r.scope ?? 'global' }));
   } catch (error) {
     console.warn('[PIPELINE] Failed to load learned-rules.json — running with no learned rules:', error);
     return [];

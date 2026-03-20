@@ -37,7 +37,10 @@ function readFromDisk(): LearnedRulesFile {
       console.warn('[RULES] Malformed learned-rules.json — rules field is not an array, returning empty');
       return { rules: [], lastAnalyzed: null, version: 1 };
     }
-    return data;
+    return {
+      ...data,
+      rules: data.rules.map((r) => ({ ...r, scope: r.scope ?? 'global' })),
+    };
   } catch (error) {
     console.warn('[RULES] Failed to read learned-rules.json — returning empty:', error);
     return { rules: [], lastAnalyzed: null, version: 1 };
@@ -132,6 +135,11 @@ export async function addRule(rule: LearnedRule): Promise<void> {
   const duplicate = rules.find((r) => r.pattern === rule.pattern);
   if (duplicate !== undefined) {
     throw new Error('DUPLICATE_PATTERN');
+  }
+
+  if (!rule.scope) {
+    console.warn('[RULES] addRule: scope not provided, defaulting to \'global\'');
+    rule.scope = 'global';
   }
 
   await saveRules([...rules, rule]);
