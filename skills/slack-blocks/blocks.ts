@@ -6,6 +6,7 @@
  */
 
 import type { KnownBlock } from '@slack/types';
+import type { LockDiagnosis } from '../lock-types.ts';
 
 export interface ApprovalMessageParams {
   guestName: string;
@@ -24,6 +25,8 @@ export interface ApprovalMessageParams {
   threadUid: string;
   leadUid: string;
   urgency: boolean;
+  doorCode?: string | null;
+  lockDiagnosis?: LockDiagnosis | null;
 }
 
 export interface PostActionContext {

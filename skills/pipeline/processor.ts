@@ -3,7 +3,11 @@ import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { MultiPropertyKBReader } from '../kb-reader/multi-reader.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
 import type { NotionSearcher } from '../notion-search/notion-search.js';
+import type { SifelyClient } from '../sifely-client/sifely-client.ts';
+import type { VlreHubClient } from '../vlre-hub-client/vlre-hub-client.ts';
+import type { LockDiagnosis } from '../lock-types.ts';
 import { buildApprovalBlocks, buildErrorBlocks, buildSupersededBlocks } from '../slack-blocks/blocks.ts';
+import { diagnoseLockAccess } from '../lock-diagnosis/index.ts';
 import { withRetry } from './retry.js';
 import { appendAuditLog } from '../audit-logger/audit-logger.ts';
 import { type LearnedRule } from './learned-rules.ts';
@@ -26,6 +30,8 @@ export interface PipelineContext {
   slackChannelId: string;
   threadTracker: SlackThreadTracker;
   notionSearch?: NotionSearcher;
+  sifelyClient?: SifelyClient;
+  vlreHubClient?: VlreHubClient;
 }
 
 interface ClassifyParams {
@@ -474,6 +480,13 @@ export async function processWebhookMessage(
     }
   }
 
+  let doorCode: string | null = null;
+  if (propUid) {
+    try {
+      doorCode = await hostfullyClient.getDoorCode(propUid);
+    } catch {}
+  }
+
   const guestName =
     lead ? `${lead.guestFirstName ?? ''} ${lead.guestLastName ?? ''}`.trim() || 'Guest' : 'Guest';
   const checkInDate = lead?.checkInDate ?? 'Unknown';
@@ -530,6 +543,18 @@ export async function processWebhookMessage(
     return;
   }
 
+  let lockDiagnosis: LockDiagnosis | null = null;
+  if (classifyResult.category === 'access' && context.sifelyClient && context.vlreHubClient && propUid) {
+    try {
+      lockDiagnosis = await diagnoseLockAccess({
+        propertyUid: propUid,
+        hostfullyClient,
+        sifelyClient: context.sifelyClient,
+        vlreHubClient: context.vlreHubClient,
+      });
+    } catch {}
+  }
+
   const resolvedConversationSummary =
     classifyResult.conversationSummary ||
     (conversationHistory.trim() ? buildFallbackSummary(conversationHistory) : null);
@@ -552,6 +577,8 @@ export async function processWebhookMessage(
       threadUid: thread_uid,
       leadUid,
       urgency: classifyResult.urgency,
+      doorCode,
+      lockDiagnosis,
     });
 
     const pending = threadTracker.getPending(thread_uid);
