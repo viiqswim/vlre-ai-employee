@@ -9,6 +9,17 @@ import { mkdir, appendFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 /**
+ * Union type for all audit log actions/events
+ */
+export type AuditAction =
+  | 'supersede'
+  | 'lock_data_fetched'
+  | 'mismatch_detected'
+  | 'lock_code_fix_initiated'
+  | 'lock_code_fix_completed'
+  | 'lock_code_fix_failed';
+
+/**
  * Appends an audit log entry to a file.
  * Creates the directory if it doesn't exist.
  * Each entry is a JSON line with an auto-generated timestamp.

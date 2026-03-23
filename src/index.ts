@@ -4,6 +4,7 @@ import { startScheduler, stopScheduler, checkMissedRun } from '../skills/slack-b
 import { registerKBAssistantHandlers } from '../skills/kb-assistant/index.js';
 import { createHostfullyClient } from '../skills/hostfully-client/index.ts';
 import { createSifelyClient } from '../skills/sifely-client/sifely-client.ts';
+import { createVlreHubClient } from '../skills/vlre-hub-client/vlre-hub-client.ts';
 import { createMultiPropertyKBReader } from '../skills/kb-reader/index.ts';
 import { createThreadTracker } from '../skills/thread-tracker/index.ts';
 import { startWebhookReceiver } from './webhook-receiver.ts';
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
 
   const slackApp = createSlackApp();
   const sifelyClient = createSifelyClient();
+  const vlreHubClient = createVlreHubClient();
   registerAllHandlers(slackApp, hostfullyClient, threadTracker, sifelyClient);
   // Use a proxy so the KB assistant always reads the CURRENT notionSearch value at call time.
   // This ensures Notion context is available once the model finishes loading, even though
@@ -92,6 +94,8 @@ async function main(): Promise<void> {
     slackApp,
     slackChannelId,
     threadTracker,
+    sifelyClient,
+    vlreHubClient,
     get notionSearch() { return notionSearch; },
   };
 
