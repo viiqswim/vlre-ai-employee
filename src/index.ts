@@ -3,6 +3,7 @@ import { registerAllHandlers } from '../skills/slack-bot/handlers.ts';
 import { startScheduler, stopScheduler, checkMissedRun } from '../skills/slack-bot/scheduler.js';
 import { registerKBAssistantHandlers } from '../skills/kb-assistant/index.js';
 import { createHostfullyClient } from '../skills/hostfully-client/index.ts';
+import { createSifelyClient } from '../skills/sifely-client/sifely-client.ts';
 import { createMultiPropertyKBReader } from '../skills/kb-reader/index.ts';
 import { createThreadTracker } from '../skills/thread-tracker/index.ts';
 import { startWebhookReceiver } from './webhook-receiver.ts';
@@ -66,7 +67,8 @@ async function main(): Promise<void> {
   // --- End Notion Integration ---
 
   const slackApp = createSlackApp();
-  registerAllHandlers(slackApp, hostfullyClient, threadTracker);
+  const sifelyClient = createSifelyClient();
+  registerAllHandlers(slackApp, hostfullyClient, threadTracker, sifelyClient);
   // Use a proxy so the KB assistant always reads the CURRENT notionSearch value at call time.
   // This ensures Notion context is available once the model finishes loading, even though
   // registerKBAssistantHandlers is called before createEmbedder() resolves.

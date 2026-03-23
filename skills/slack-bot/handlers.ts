@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import type { App } from '@slack/bolt';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
+import type { SifelyClient } from '../sifely-client/sifely-client.ts';
 import { registerRuleHandlers } from './rule-handlers.js';
 import {
   buildApprovedBlocks,
@@ -357,14 +358,137 @@ export function registerEditHandler(
   });
 }
 
+export function registerFixLockCodeHandler(app: App, sifelyClient: SifelyClient): void {
+  app.action('sifely_fix_lock_code', async ({ ack, body, client }) => {
+    await ack();
+
+    try {
+      const buttonValue = (body as { actions?: Array<{ value?: string }> }).actions?.[0]?.value;
+      if (!buttonValue) return;
+
+      let parsed: {
+        threadUid: string;
+        leadUid: string;
+        doorCode: string | null;
+        mismatchedLocks: Array<{ sifelyLockId: string; lockName: string }>;
+      };
+
+      try {
+        parsed = JSON.parse(buttonValue) as typeof parsed;
+      } catch {
+        return;
+      }
+
+      const { leadUid, doorCode, mismatchedLocks } = parsed;
+
+      if (!doorCode || !mismatchedLocks?.length) return;
+
+      const channel = (body as { channel?: { id?: string } }).channel?.id;
+      const messageTs = (body as { message?: { ts?: string } }).message?.ts;
+
+      if (!channel || !messageTs) return;
+
+      await client.chat.update({
+        channel,
+        ts: messageTs,
+        text: '⏳ Fixing lock codes...',
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: '⏳ *Fixing lock codes...* Please wait.' },
+          },
+        ],
+      });
+
+      const results: Array<{ lockName: string; success: boolean; error?: string }> = [];
+
+      for (const { sifelyLockId, lockName } of mismatchedLocks) {
+        try {
+          const passcodes = await sifelyClient.listPasscodes(sifelyLockId);
+          const permanentPasscodes = passcodes.filter(p => p.keyboardPwdType === 2);
+
+          if (permanentPasscodes.length === 0) {
+            results.push({ lockName, success: false, error: 'No PERMANENT passcode found' });
+            continue;
+          }
+
+          await sifelyClient.updatePasscode({
+            keyboardPwdId: permanentPasscodes[0]!.keyboardPwdId,
+            lockId: sifelyLockId,
+            newKeyboardPwd: doorCode,
+          });
+
+          results.push({ lockName, success: true });
+        } catch (error) {
+          results.push({
+            lockName,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const totalCount = results.length;
+      const userId = (body as { user?: { id?: string } }).user?.id ?? 'unknown';
+
+      let statusText: string;
+      if (successCount === totalCount) {
+        statusText = `✅ *Lock codes fixed!* All ${totalCount} lock(s) now accept code \`${doorCode}\``;
+      } else {
+        const failedLocks = results
+          .filter(r => !r.success)
+          .map(r => `${r.lockName}: ${r.error}`)
+          .join(', ');
+        statusText = `⚠️ *Partial fix:* ${successCount}/${totalCount} locks updated. Failed: ${failedLocks}`;
+      }
+
+      await client.chat.update({
+        channel,
+        ts: messageTs,
+        text: statusText,
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: statusText },
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `Triggered by <@${userId}> · ${new Date().toISOString()}`,
+              },
+            ],
+          },
+        ],
+      });
+
+      appendAuditLog({
+        action: successCount === totalCount ? 'lock_code_fix_completed' : 'lock_code_fix_partial',
+        userId,
+        leadUid,
+        doorCode,
+        locksFixed: successCount,
+        locksTotal: totalCount,
+        results,
+      });
+    } catch (error) {
+      console.error('[sifely_fix_lock_code] Unexpected error:', error);
+    }
+  });
+}
+
 export function registerAllHandlers(
   app: App,
   hostfullyClient: HostfullyClient,
   threadTracker: SlackThreadTracker,
+  sifelyClient: SifelyClient,
 ): void {
   registerApproveHandler(app, hostfullyClient, threadTracker);
   registerRejectHandler(app, threadTracker);
   registerEditHandler(app, hostfullyClient, threadTracker);
   registerRuleHandlers(app);
-  console.log('[SLACK] All action handlers registered (approve, reject, edit, rules)');
+  registerFixLockCodeHandler(app, sifelyClient);
+  console.log('[SLACK] All action handlers registered (approve, reject, edit, rules, fix-lock-code)');
 }

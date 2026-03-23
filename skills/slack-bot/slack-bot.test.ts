@@ -4,6 +4,7 @@ import { createSlackApp } from './app.ts';
 import { registerAllHandlers, appendAuditLog } from './handlers.ts';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { SlackThreadTracker } from '../thread-tracker/thread-tracker.ts';
+import type { SifelyClient } from '../sifely-client/sifely-client.ts';
 import { existsSync, unlinkSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -39,9 +40,10 @@ test('registerAllHandlers registers handlers without throwing', () => {
 
   const mockClient = {} as unknown as HostfullyClient;
   const mockTracker = {} as unknown as SlackThreadTracker;
+  const mockSifelyClient = {} as unknown as SifelyClient;
 
   expect(() => {
-    registerAllHandlers(app, mockClient, mockTracker);
+    registerAllHandlers(app, mockClient, mockTracker, mockSifelyClient);
   }).not.toThrow();
 });
 
