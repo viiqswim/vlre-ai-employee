@@ -90,6 +90,62 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
     },
   ] : [];
 
+  // Door code block — always shown
+  const doorCodeText = params.doorCode
+    ? `🔑 *Door Code:* \`${params.doorCode}\``
+    : `🔑 *Door Code:* _Not configured_`;
+  const doorCodeBlock: KnownBlock = {
+    type: 'section',
+    text: { type: 'mrkdwn', text: doorCodeText },
+  };
+
+  // Mismatch warning banner — only when hasMismatch is true
+  const diagnosis = params.lockDiagnosis;
+  const mismatchBlocks: KnownBlock[] = diagnosis?.hasMismatch === true ? [
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `⚠️ *CODE MISMATCH DETECTED*\nHostfully says: \`${diagnosis.hostfullyDoorCode ?? 'none'}\`\n${diagnosis.diagnosisSummary}`,
+      },
+    },
+  ] : [];
+
+  // Lock status context block — only when lockDiagnosis is present
+  const lockStatusBlocks: KnownBlock[] = diagnosis ? [
+    {
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: diagnosis.diagnosisSummary },
+      ],
+    },
+  ] : [];
+
+  // Fix Lock Code button block — only when hasMismatch is true
+  const fixLockBlocks: KnownBlock[] = diagnosis?.hasMismatch === true ? [
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '🔧 Fix Lock Code', emoji: true },
+          style: 'danger',
+          action_id: 'sifely_fix_lock_code',
+          value: JSON.stringify({
+            threadUid: params.threadUid,
+            leadUid: params.leadUid,
+            doorCode: params.doorCode,
+            mismatchedLocks: diagnosis.locks
+              .filter(l => !l.matchesHostfully)
+              .map(l => ({ sifelyLockId: l.lock.sifelyLockId, lockName: l.lock.lockName }))
+              .slice(0, 5),
+          }).slice(0, 1900),
+        },
+      ],
+    },
+  ] : [];
+
   return [
     {
       type: 'header',
@@ -113,6 +169,7 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
         },
       ],
     },
+    doorCodeBlock,
     { type: 'divider' },
     ...(params.conversationSummary ? [
       {
@@ -130,6 +187,7 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
         text: `*💬 Latest message:*\n>${params.guestMessage.replace(/\n/g, '\n>')}`,
       },
     },
+    ...mismatchBlocks,
     {
       type: 'section',
       text: {
@@ -137,7 +195,9 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
         text: `*🤖 Suggested response:*\n>${params.draftResponse.replace(/\n/g, '\n>')}`,
       },
     },
+    ...lockStatusBlocks,
     { type: 'divider' },
+    ...fixLockBlocks,
     {
       type: 'actions',
       elements: [
