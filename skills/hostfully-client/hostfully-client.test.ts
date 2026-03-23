@@ -389,3 +389,78 @@ describe('getMessages', () => {
     expect(messages[0]?.content).toBe('Already a string');
   });
 });
+
+describe('getDoorCode', () => {
+  test('returns the door_code text when the field exists', async () => {
+    const apiPayload = {
+      customData: [
+        { customDataField: { uid: 'field-1', name: 'wifi_password' }, text: 'secretwifi' },
+        { customDataField: { uid: 'field-2', name: 'door_code' }, text: '1234' },
+      ],
+    };
+    fetchMock = mock(() => Promise.resolve(mockResponse(apiPayload)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const code = await client.getDoorCode('prop-1');
+
+    expect(code).toBe('1234');
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('/properties/prop-1/customData');
+  });
+
+  test('returns null when no door_code field exists', async () => {
+    const apiPayload = {
+      customData: [
+        { customDataField: { uid: 'field-1', name: 'wifi_password' }, text: 'secretwifi' },
+      ],
+    };
+    fetchMock = mock(() => Promise.resolve(mockResponse(apiPayload)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const code = await client.getDoorCode('prop-1');
+
+    expect(code).toBeNull();
+  });
+
+  test('returns null when customData array is empty', async () => {
+    fetchMock = mock(() => Promise.resolve(mockResponse({ customData: [] })));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const code = await client.getDoorCode('prop-1');
+
+    expect(code).toBeNull();
+  });
+});
+
+describe('updateDoorCode', () => {
+  test('finds door_code field and calls updateCustomData with correct args', async () => {
+    const getPayload = {
+      customData: [
+        { customDataField: { uid: 'field-door', name: 'door_code' }, text: '1234' },
+      ],
+    };
+    fetchMock = mock(() => Promise.resolve(mockResponse(getPayload)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    fetchMock.mockImplementationOnce(() => Promise.resolve(mockResponse(getPayload)));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 204 })));
+
+    await client.updateDoorCode('prop-1', '5678');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [putUrl, putOpts] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(putUrl).toContain('/properties/prop-1/customData/field-door');
+    expect(putOpts.method).toBe('PUT');
+    const body = JSON.parse(putOpts.body as string) as { text: string };
+    expect(body.text).toBe('5678');
+  });
+
+  test('throws when no door_code field is found', async () => {
+    fetchMock = mock(() =>
+      Promise.resolve(mockResponse({ customData: [{ customDataField: { uid: 'f1', name: 'wifi_password' }, text: 'wifi' }] }))
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(client.updateDoorCode('prop-1', '5678')).rejects.toThrow('door_code');
+  });
+});
