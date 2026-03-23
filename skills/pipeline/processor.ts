@@ -160,7 +160,21 @@ Confidence guidelines:
 - 0.9+: KB has exact answer, straightforward request, response is clearly correct
 - 0.7-0.9: Good KB match, minor judgment involved
 - 0.5-0.7: Moderate confidence, CS team may want to adjust
-- <0.5: Low confidence — escalation triggers, complex situation, or no KB match`;
+- <0.5: Low confidence — escalation triggers, complex situation, or no KB match
+
+## Door Access & Lock Issues
+
+When a guest reports they cannot open the door, cannot get in, or has access code problems:
+- Classify as category: "access"
+- Set urgency: true if the guest is currently locked out or unable to enter
+- In your draft response, acknowledge their situation and let them know we're checking their access code
+- If lock diagnosis data is provided in the context, use it to craft your response:
+  - If codes match and access records show successful entries: suggest the guest try again, ensure they're entering the correct code
+  - If codes match but no recent access attempts: provide the door code and walk them through using it
+  - If codes DON'T match: acknowledge the issue and explain that the team is fixing it
+  - If access records show failed attempts with wrong code: the guest is entering an incorrect code, provide the correct one
+- ALWAYS include the door code in your response when it's an access-related question
+- NEVER suggest the guest contact us separately — you ARE the contact channel`;
 
 // Load confirmed learned rules at startup (hot-reload via getConfirmedRules)
 console.log(`[PIPELINE] Loaded ${getConfirmedRules().length} learned rule(s) from CS team feedback`);
