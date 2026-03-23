@@ -10,6 +10,7 @@ import type {
   HostfullyWebhookRegistrationResponse,
   HostfullyApiError,
   HostfullyClientConfig,
+  HostfullyCustomData,
 } from './types.ts';
 
 export class HostfullyClient {
@@ -162,6 +163,47 @@ export class HostfullyClient {
 
   async deregisterWebhook(webhookUid: string): Promise<void> {
     await this.request<void>('DELETE', `/webhooks/${webhookUid}`);
+  }
+
+  async getCustomData(propertyUid: string): Promise<HostfullyCustomData[]> {
+    const response = await this.request<{ customData?: HostfullyCustomData[] }>(
+      'GET',
+      `/properties/${propertyUid}/customData`
+    );
+    return response.customData ?? [];
+  }
+
+  async getDoorCode(propertyUid: string): Promise<string | null> {
+    const customData = await this.getCustomData(propertyUid);
+    const doorCodeField = customData.find(
+      (field) => field.customDataField.name === 'door_code'
+    );
+    return doorCodeField?.text ?? null;
+  }
+
+  async updateCustomData(
+    propertyUid: string,
+    fieldUid: string,
+    text: string
+  ): Promise<void> {
+    await this.request<void>(
+      'PUT',
+      `/properties/${propertyUid}/customData/${fieldUid}`,
+      { text }
+    );
+  }
+
+  async updateDoorCode(propertyUid: string, newCode: string): Promise<void> {
+    const customData = await this.getCustomData(propertyUid);
+    const doorCodeField = customData.find(
+      (field) => field.customDataField.name === 'door_code'
+    );
+    if (!doorCodeField) {
+      throw new Error(
+        `No door_code custom data field found for property ${propertyUid}`
+      );
+    }
+    await this.updateCustomData(propertyUid, doorCodeField.customDataField.uid, newCode);
   }
 }
 

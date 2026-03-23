@@ -151,6 +151,16 @@ export interface HostfullyApiError {
   details?: unknown;
 }
 
+export interface HostfullyCustomDataField {
+  uid: string;
+  name: string;
+}
+
+export interface HostfullyCustomData {
+  customDataField: HostfullyCustomDataField;
+  text: string;
+}
+
 export interface HostfullyClientConfig {
   apiKey: string;
   agencyUid: string;
