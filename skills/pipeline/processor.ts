@@ -484,7 +484,9 @@ export async function processWebhookMessage(
   if (propUid) {
     try {
       doorCode = await hostfullyClient.getDoorCode(propUid);
-    } catch {}
+    } catch (e) {
+      console.warn('[PIPELINE] getDoorCode failed for property:', propUid, e);
+    }
   }
 
   const guestName =
@@ -552,7 +554,9 @@ export async function processWebhookMessage(
         sifelyClient: context.sifelyClient,
         vlreHubClient: context.vlreHubClient,
       });
-    } catch {}
+    } catch (e) {
+      console.warn('[PIPELINE] Lock diagnosis failed for property:', propUid, e);
+    }
   }
 
   const resolvedConversationSummary =

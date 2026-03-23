@@ -68,7 +68,11 @@ export async function diagnoseLockAccess(params: DiagnosisParams): Promise<LockD
     })
   );
 
-  const hasMismatch = lockResults.some((r) => !r.matchesHostfully && r.passcodes.length > 0);
+  // Only flag mismatch when the lock has PERMANENT passcodes (type 2) but none match the door code.
+  // Locks with only timed/one-time codes don't participate in mismatch detection.
+  const hasMismatch = lockResults.some(
+    (r) => !r.matchesHostfully && r.passcodes.filter((p) => p.keyboardPwdType === 2).length > 0
+  );
 
   const summaryLines: string[] = [];
 
