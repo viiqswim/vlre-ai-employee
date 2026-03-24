@@ -332,8 +332,8 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
       if (!content) throw new Error('[PIPELINE] Claude proxy returned empty response');
       responseText = content;
     } catch (error) {
-      const fallbackToApi = process.env['CLAUDE_FALLBACK_TO_API'] === 'true';
-      if (fallbackToApi && apiKey) {
+       const fallbackToApi = process.env['CLAUDE_FALLBACK_TO_API'] !== 'false';
+       if (fallbackToApi && apiKey) {
         useApiMode = true;
       } else {
         const msg = error instanceof Error ? error.message : String(error);

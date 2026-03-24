@@ -654,11 +654,56 @@ describe('proxy→API fallback', () => {
     delete process.env['ANTHROPIC_API_KEY'];
   });
 
-  test('does NOT fall back when CLAUDE_FALLBACK_TO_API is unset', async () => {
-    global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
+  test('falls back to API by default when proxy fails and ANTHROPIC_API_KEY is set', async () => {
+    global.fetch = mock(async (url: string | Request) => {
+      const urlStr = typeof url === 'string' ? url : url.url;
+
+      if (typeof urlStr === 'string' && urlStr.includes('api.anthropic.com')) {
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    classification: 'general_inquiry',
+                    confidence: 0.9,
+                    suggestedResponse: 'Hello!',
+                    reasoning: 'test',
+                  }),
+                },
+              ],
+            }),
+        } as Response;
+      }
+
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof global.fetch;
 
     process.env['CLAUDE_MODE'] = 'proxy';
     delete process.env['CLAUDE_FALLBACK_TO_API'];
+    process.env['ANTHROPIC_API_KEY'] = 'test-key-123';
+
+    const context = makeContext();
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(1);
+
+    const firstCallArg = postCalls[0]?.[0] as { text?: string; blocks?: unknown[] };
+    const hasManualReview = firstCallArg?.text?.includes('Manual Review Required') ?? false;
+    expect(hasManualReview).toBe(false);
+
+    delete process.env['CLAUDE_MODE'];
+    delete process.env['ANTHROPIC_API_KEY'];
+  });
+
+  test('does NOT fall back when CLAUDE_FALLBACK_TO_API=false', async () => {
+    global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
+
+    process.env['CLAUDE_MODE'] = 'proxy';
+    process.env['CLAUDE_FALLBACK_TO_API'] = 'false';
 
     const context = makeContext();
     await processWebhookMessage(makePayload(), context);
@@ -670,6 +715,7 @@ describe('proxy→API fallback', () => {
     expect(text).toContain('Manual Review Required');
 
     delete process.env['CLAUDE_MODE'];
+    delete process.env['CLAUDE_FALLBACK_TO_API'];
   });
 
   test('posts Manual Review when both proxy and API fallback fail', async () => {
