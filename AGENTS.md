@@ -18,7 +18,7 @@ bun run start               # Full startup: OpenClaw check → Tailscale Funnel 
 ## Project Structure
 
 ```
-src/                Main service (index.ts entry, webhook-receiver.ts, index.test.ts)
+src/                Main service (index.ts entry, webhook-receiver.ts, proxy-health.ts, startup-checks.ts, index.test.ts)
 skills/             8 OpenClaw skills (pipeline, hostfully-client, kb-reader, slack-bot, slack-blocks, dedup, thread-tracker, audit-logger)
 scripts/            Utilities (register-webhook.ts, simulate-webhook.ts, deregister-webhook.ts, convert-xlsx-to-kb.ts, common-kb-builder.ts)
 docs/               Architecture and security documentation
@@ -38,7 +38,7 @@ Default to Bun instead of Node.js, npm, or vite:
 - `bun install` instead of `npm install`
 - `bun run <script>` instead of `npm run <script>`
 - `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads `.env` — don't use dotenv
+- Bun automatically loads `.env` — don't use dotenv. **Exception**: `start.ts` runs under `zx` (not Bun), so it explicitly loads `.env` at startup using `fs.readFileSync`. Do not remove that block.
 
 **APIs**: Use `Bun.serve()` for routes/WebSockets (not express), `bun:sqlite` for SQLite, `Bun.file` for file I/O, `Bun.$` for shell commands.
 

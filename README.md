@@ -55,7 +55,11 @@ bun run start
 1. Checks the OpenClaw gateway is running (warns if not — non-fatal)
 2. Starts Tailscale Funnel on `WEBHOOK_PORT` and extracts the public URL (skipped if Tailscale isn't installed)
 3. Starts the `claude-max-api` proxy on port 3456 — **only if** `CLAUDE_MODE=proxy` and the proxy isn't already running. Requires `claude-max-api` installed under Node 20.19.0 via asdf.
-4. Starts the main service via `bun run src/index.ts`
+4. Warns if `CLAUDE_FALLBACK_TO_API` is enabled but `ANTHROPIC_API_KEY` is not set (non-fatal)
+5. Validates the Hostfully API key by calling the API — **exits immediately** if the key is invalid or returns 401/403
+6. Starts the main service via `bun run src/index.ts`
+
+When `CLAUDE_MODE=proxy`, a background health monitor also runs — it logs `⚠️ Claude proxy is DOWN` and `✅ Claude proxy recovered` as the proxy state changes, without interrupting the service.
 
 ---
 
@@ -72,10 +76,10 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `CLAUDE_MODE` | Yes | `proxy` (Claude Max subscription, free) or `api` (Anthropic API key, pay-per-token) |
 | `CLAUDE_PROXY_URL` | If proxy | Claude proxy URL. Default: `http://127.0.0.1:3456` |
 | `CLAUDE_MODEL` | Yes | Claude model ID (e.g. `claude-sonnet-4-20250514`) |
-| `ANTHROPIC_API_KEY` | If api mode | Anthropic API key |
+| `ANTHROPIC_API_KEY` | If api or fallback | Anthropic API key. Required when `CLAUDE_MODE=api` or when proxy fallback is active (default). |
 | `CLAUDE_RETRY_ATTEMPTS` | No | Retry attempts on transient failures. Default: `2` |
 | `CLAUDE_TIMEOUT_MS` | No | Per-request timeout in milliseconds. Default: `30000` |
-| `CLAUDE_FALLBACK_TO_API` | No | Fall back to Anthropic API if proxy unreachable. Requires `ANTHROPIC_API_KEY`. Default: `false` |
+| `CLAUDE_FALLBACK_TO_API` | No | Fall back to Anthropic API if proxy unreachable. Requires `ANTHROPIC_API_KEY`. Enabled by default — set to `false` to disable. |
 | `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |
 | `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |
@@ -244,6 +248,19 @@ This is normal if the dedup store was cleared. The store persists across restart
 ```bash
 truncate -s 0 data/processed-messages.txt
 ```
+
+**Service exits immediately with "Hostfully API key is invalid or unauthorized"**
+
+This means the startup validation called the Hostfully API and got a 401 or 403 response. The key in `.env` is either wrong or has been rotated.
+
+1. Verify `HOSTFULLY_API_KEY` in `.env` matches the key in Hostfully → Agency Settings → API
+2. Test the key directly:
+   ```bash
+   curl -H "X-HOSTFULLY-APIKEY: YOUR_KEY_HERE" \
+     "https://api.hostfully.com/api/v3.2/webhooks?agencyUid=YOUR_AGENCY_UID"
+   ```
+   Expected: HTTP 200. If you get 401, the key is wrong or expired.
+3. If the key was recently rotated in Hostfully, update `HOSTFULLY_API_KEY` in `.env` and restart.
 
 ---
 
