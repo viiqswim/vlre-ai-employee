@@ -138,7 +138,7 @@ export async function callClaude(systemPrompt: string, userMessage: string): Pro
     return null;
   }
   const openRouterBaseUrl = (process.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const model = process.env['CLAUDE_MODEL'] ?? 'minimax/minimax-m2.7';
+  const model = process.env['OPENROUTER_MODEL'] ?? 'minimax/minimax-m2.7';
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
   try {

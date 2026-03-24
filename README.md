@@ -71,7 +71,7 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `HOSTFULLY_AGENCY_UID` | Yes | Your agency UID from Hostfully |
 | `HOSTFULLY_API_URL` | No | Base URL. Default: `https://api.hostfully.com/api/v3.2` |
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key. Get one at [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `CLAUDE_MODEL` | Yes | OpenRouter model ID (e.g. `minimax/minimax-m2.7`, `anthropic/claude-sonnet-4-20250514`) |
+| `OPENROUTER_MODEL` | Yes | OpenRouter model ID (e.g. `minimax/minimax-m2.7`, `anthropic/claude-sonnet-4-20250514`) |
 | `CLAUDE_RETRY_ATTEMPTS` | No | Retry attempts on transient failures. Default: `2` |
 | `CLAUDE_TIMEOUT_MS` | No | Per-request timeout in milliseconds. Default: `30000` |
 | `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |

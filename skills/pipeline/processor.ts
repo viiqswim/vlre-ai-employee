@@ -286,7 +286,7 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
   const openRouterKey = process.env['OPENROUTER_API_KEY'];
   if (!openRouterKey) throw new Error('[PIPELINE] OPENROUTER_API_KEY not set');
   const openRouterBaseUrl = (process.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
-  const model = process.env['CLAUDE_MODEL'] ?? 'minimax/minimax-m2.7';
+  const model = process.env['OPENROUTER_MODEL'] ?? 'minimax/minimax-m2.7';
   const retryAttempts = parseInt(process.env['CLAUDE_RETRY_ATTEMPTS'] ?? '2', 10);
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
