@@ -44,6 +44,12 @@ export class HostfullyClient {
         throw new Error('Hostfully API rate limit exceeded (429) — too many requests, slow down or check quota');
       }
 
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          `Hostfully API authentication failed (${response.status}) — check that HOSTFULLY_API_KEY is valid and has not been rotated`
+        );
+      }
+
       let errorMessage = `Hostfully API error: ${response.status} ${response.statusText}`;
       try {
         const errorBody = await response.json() as HostfullyApiError;

@@ -343,6 +343,26 @@ describe('error handling', () => {
 
     await expect(client.getMessage('any-uid')).rejects.toThrow(/rate limit/i);
   });
+
+  test('401 throws with authentication failed message', async () => {
+    fetchMock = mock(() =>
+      Promise.resolve(new Response(null, { status: 401, statusText: 'Unauthorized' }))
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(client.getMessage('any-uid')).rejects.toThrow(/authentication failed.*401/i);
+    await expect(client.getMessage('any-uid')).rejects.toThrow(/HOSTFULLY_API_KEY/i);
+  });
+
+  test('403 throws with authentication failed message', async () => {
+    fetchMock = mock(() =>
+      Promise.resolve(new Response(null, { status: 403, statusText: 'Forbidden' }))
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(client.getMessage('any-uid')).rejects.toThrow(/authentication failed.*403/i);
+    await expect(client.getMessage('any-uid')).rejects.toThrow(/HOSTFULLY_API_KEY/i);
+  });
 });
 
 describe('getMessages', () => {
