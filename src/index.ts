@@ -1,6 +1,6 @@
 import { createSlackApp, startSlackApp, stopSlackApp } from '../skills/slack-bot/app.ts';
 import { registerAllHandlers } from '../skills/slack-bot/handlers.ts';
-import { startScheduler, stopScheduler, checkMissedRun } from '../skills/slack-bot/scheduler.js';
+import { startScheduler, stopScheduler } from '../skills/slack-bot/scheduler.js';
 import { registerKBAssistantHandlers } from '../skills/kb-assistant/index.js';
 import { createHostfullyClient } from '../skills/hostfully-client/index.ts';
 import { createSifelyClient } from '../skills/sifely-client/sifely-client.ts';
@@ -84,7 +84,10 @@ async function main(): Promise<void> {
 
   const slackChannelId = process.env['SLACK_CHANNEL_ID'] ?? '';
   startScheduler(slackApp, slackChannelId);
-  await checkMissedRun(slackApp, slackChannelId);
+  await slackApp.client.chat.postMessage({
+    channel: slackChannelId,
+    text: `✅ ${BOT_NAME} is back online`,
+  });
 
   // pipelineContext uses a getter so processWebhookMessage reads the CURRENT value of
   // notionSearch at call time (not the value at context creation time).

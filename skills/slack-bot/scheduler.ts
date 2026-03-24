@@ -1,7 +1,7 @@
 import type { App } from '@slack/bolt';
 import { Cron } from 'croner';
 import { runWeeklyAnalysis } from '../pipeline/edit-analyzer.js';
-import { getConfirmedRules, loadRules, getLastAnalyzed } from '../pipeline/rules-store.js';
+import { getConfirmedRules, loadRules } from '../pipeline/rules-store.js';
 import { buildWeeklyRecapBlocks } from '../slack-blocks/recap-blocks.js';
 
 let cronJob: Cron | null = null;
@@ -54,12 +54,4 @@ export function stopScheduler(): void {
   console.log('[SCHEDULER] Scheduler stopped');
 }
 
-export async function checkMissedRun(app: App, slackChannelId: string): Promise<void> {
-  _app = app;
-  _slackChannelId = slackChannelId;
-  const lastAnalyzed = getLastAnalyzed();
-  if (lastAnalyzed === null || (Date.now() - new Date(lastAnalyzed).getTime()) > 7 * 24 * 60 * 60 * 1000) {
-    console.log(`[SCHEDULER] Missed run detected (last: ${lastAnalyzed ?? 'never'}). Running now...`);
-    await runAnalysis();
-  }
-}
+
