@@ -59,12 +59,17 @@ export function registerRuleHandlers(app: App): void {
           'approved',
           userId,
         );
-        await client.chat.update({
-          channel: channelId,
-          ts: messageTs,
-          blocks: updatedBlocks,
-          text: '📊 Weekly Rules Recap (updated)',
-        });
+        try {
+          await client.chat.update({
+            channel: channelId,
+            ts: messageTs,
+            blocks: updatedBlocks,
+            text: '📊 Weekly Rules Recap (updated)',
+          });
+        } catch (updateError) {
+          const msg = updateError instanceof Error ? updateError.message : String(updateError);
+          console.warn('[RULES] approve_rule: could not update recap message (non-blocking): ' + msg);
+        }
       }
 
       console.log('[RULES] Rule ' + ruleId + ' confirmed by ' + userId);
@@ -111,12 +116,17 @@ export function registerRuleHandlers(app: App): void {
           'rejected',
           userId,
         );
-        await client.chat.update({
-          channel: channelId,
-          ts: messageTs,
-          blocks: updatedBlocks,
-          text: '📊 Weekly Rules Recap (updated)',
-        });
+        try {
+          await client.chat.update({
+            channel: channelId,
+            ts: messageTs,
+            blocks: updatedBlocks,
+            text: '📊 Weekly Rules Recap (updated)',
+          });
+        } catch (updateError) {
+          const msg = updateError instanceof Error ? updateError.message : String(updateError);
+          console.warn('[RULES] reject_rule: could not update recap message (non-blocking): ' + msg);
+        }
       }
 
       console.log('[RULES] Rule ' + ruleId + ' rejected by ' + userId);
@@ -298,12 +308,17 @@ export function registerRuleHandlers(app: App): void {
       const message = (body as { message?: { blocks?: KnownBlock[] } }).message;
       if (message?.blocks && channelId && messageTs) {
         const updatedBlocks = buildRuleActionedRecapBlocks(message.blocks, ruleId, 'rejected', userId);
-        await client.chat.update({
-          channel: channelId,
-          ts: messageTs,
-          blocks: updatedBlocks,
-          text: '🧠 Rule notification (updated)',
-        });
+        try {
+          await client.chat.update({
+            channel: channelId,
+            ts: messageTs,
+            blocks: updatedBlocks,
+            text: '🧠 Rule notification (updated)',
+          });
+        } catch (updateError) {
+          const msg = updateError instanceof Error ? updateError.message : String(updateError);
+          console.warn('[RULES] refine_rule: could not update recap message (non-blocking): ' + msg);
+        }
       }
 
       console.log('[RULES] Rule ' + ruleId + ' set to pending_refinement by ' + userId);
@@ -439,12 +454,17 @@ export function registerRuleHandlers(app: App): void {
       const message = (body as { message?: { blocks?: KnownBlock[] } }).message;
       if (message?.blocks && channelId && messageTs) {
         const updatedBlocks = buildRuleActionedRecapBlocks(message.blocks, ruleId, 'approved', userId);
-        await client.chat.update({
-          channel: channelId,
-          ts: messageTs,
-          blocks: updatedBlocks,
-          text: '✏️ Refined rule review (updated)',
-        });
+        try {
+          await client.chat.update({
+            channel: channelId,
+            ts: messageTs,
+            blocks: updatedBlocks,
+            text: '✏️ Refined rule review (updated)',
+          });
+        } catch (updateError) {
+          const msg = updateError instanceof Error ? updateError.message : String(updateError);
+          console.warn('[RULES] accept_refined_rule: could not update recap message (non-blocking): ' + msg);
+        }
       }
 
       console.log('[RULES] Refined rule ' + ruleId + ' accepted by ' + userId);
@@ -486,12 +506,17 @@ export function registerRuleHandlers(app: App): void {
       const message = (body as { message?: { blocks?: KnownBlock[] } }).message;
       if (message?.blocks && channelId && messageTs) {
         const updatedBlocks = buildRuleActionedRecapBlocks(message.blocks, ruleId, 'rejected', userId);
-        await client.chat.update({
-          channel: channelId,
-          ts: messageTs,
-          blocks: updatedBlocks,
-          text: '✏️ Refined rule review (updated)',
-        });
+        try {
+          await client.chat.update({
+            channel: channelId,
+            ts: messageTs,
+            blocks: updatedBlocks,
+            text: '✏️ Refined rule review (updated)',
+          });
+        } catch (updateError) {
+          const msg = updateError instanceof Error ? updateError.message : String(updateError);
+          console.warn('[RULES] reject_refined_rule: could not update recap message (non-blocking): ' + msg);
+        }
       }
 
       console.log('[RULES] Refined rule ' + ruleId + ' rejected by ' + userId);
