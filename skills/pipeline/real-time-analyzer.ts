@@ -131,68 +131,41 @@ export async function analyzeEditInBackground(params: {
   }
 }
 
-/**
- * Generic Claude API caller supporting both proxy and API modes.
- * Supports both proxy mode (CLAUDE_MODE=proxy) and API mode (CLAUDE_MODE=api).
- * Returns the raw response text or null on failure.
- */
 export async function callClaude(systemPrompt: string, userMessage: string): Promise<string | null> {
-  const mode = process.env['CLAUDE_MODE'] ?? 'api';
-  const model = process.env['CLAUDE_MODEL'] ?? 'claude-3-5-sonnet-20241022';
+  const openRouterKey = process.env['OPENROUTER_API_KEY'];
+  if (!openRouterKey) {
+    console.error('[ANALYZER] OPENROUTER_API_KEY not set');
+    return null;
+  }
+  const openRouterBaseUrl = (process.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+  const model = process.env['CLAUDE_MODEL'] ?? 'minimax/minimax-m2.7';
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
   try {
-    if (mode === 'proxy') {
-      const proxyUrl = process.env['CLAUDE_PROXY_URL'] ?? 'http://127.0.0.1:3456';
-      const response = await fetch(`${proxyUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          max_tokens: 512,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!response.ok) {
-        console.error(`[ANALYZER] Proxy request failed: ${response.status} ${response.statusText}`);
-        return null;
-      }
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      return data.choices?.[0]?.message?.content?.trim() ?? null;
-    } else {
-      const apiKey = process.env['ANTHROPIC_API_KEY'];
-      if (!apiKey) {
-        console.error('[ANALYZER] ANTHROPIC_API_KEY not set');
-        return null;
-      }
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 512,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userMessage }],
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!response.ok) {
-        console.error(`[ANALYZER] API request failed: ${response.status} ${response.statusText}`);
-        return null;
-      }
-      const data = (await response.json()) as { content?: Array<{ type: string; text?: string }> };
-      return data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+    const response = await fetch(`${openRouterBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openRouterKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 512,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) {
+      console.error(`[ANALYZER] OpenRouter API request failed: ${response.status} ${response.statusText}`);
+      return null;
     }
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content?.trim() ?? null;
   } catch (err) {
-    console.error('[ANALYZER] Claude call failed:', err instanceof Error ? err.message : String(err));
+    console.error('[ANALYZER] OpenRouter call failed:', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
