@@ -106,8 +106,20 @@ async function main(): Promise<void> {
 
   console.log(`\n✅ ${BOT_NAME} is ready\n`);
 
+  const postOfflineMessage = async (reason: string) => {
+    try {
+      await slackApp.client.chat.postMessage({
+        channel: slackChannelId,
+        text: `🔴 ${BOT_NAME} is going offline — ${reason}`,
+      });
+    } catch {
+      // best-effort — don't block shutdown or crash recovery
+    }
+  };
+
   const shutdown = async (signal: string) => {
     console.log(`\n[${BOT_NAME}] ${signal} received — shutting down gracefully`);
+    await postOfflineMessage('shutting down');
     stopNotionScheduler?.();
     closeNotionDB?.();
     stopScheduler();
@@ -117,6 +129,16 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', () => { void shutdown('SIGINT'); });
   process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+
+  process.on('uncaughtException', (err) => {
+    console.error(`[${BOT_NAME}] Uncaught exception:`, err);
+    void postOfflineMessage('crashed — uncaught exception').finally(() => process.exit(1));
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    console.error(`[${BOT_NAME}] Unhandled rejection:`, reason);
+    void postOfflineMessage('crashed — unhandled rejection').finally(() => process.exit(1));
+  });
 }
 
 main().catch((err) => {
