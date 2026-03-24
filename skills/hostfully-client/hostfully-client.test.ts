@@ -452,6 +452,43 @@ describe('getDoorCode', () => {
   });
 });
 
+describe('validateApiKey', () => {
+  test('resolves when API returns 200', async () => {
+    fetchMock = mock(() => Promise.resolve(mockResponse({ webhooks: [] }, 200)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(client.validateApiKey({ _retryDelayMs: 0 })).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/webhooks');
+    expect(url).toContain('agencyUid=test-agency-uid');
+  });
+
+  test('retries on transient error then succeeds', async () => {
+    fetchMock = mock(() => Promise.resolve(mockResponse({ webhooks: [] }, 200)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 500, statusText: 'Server Error' })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(mockResponse({ webhooks: [] })));
+
+    await expect(client.validateApiKey({ _retryDelayMs: 0 })).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('throws with clear message on 401', async () => {
+    fetchMock = mock(() => Promise.resolve(new Response(null, { status: 401 })));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(client.validateApiKey({ _retryDelayMs: 0 })).rejects.toThrow(/invalid or unauthorized.*401/i);
+  });
+
+  test('throws with clear message on 403', async () => {
+    fetchMock = mock(() => Promise.resolve(new Response(null, { status: 403 })));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(client.validateApiKey({ _retryDelayMs: 0 })).rejects.toThrow(/invalid or unauthorized.*403/i);
+  });
+});
+
 describe('updateDoorCode', () => {
   test('finds door_code field and calls updateCustomData with correct args', async () => {
     const getPayload = {

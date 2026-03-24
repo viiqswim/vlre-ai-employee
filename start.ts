@@ -131,6 +131,17 @@ if (process.env['CLAUDE_MODE'] === 'proxy') {
   }
 }
 
+const { createHostfullyClient } = await import('./skills/hostfully-client/client.ts')
+const hostfullyClient = createHostfullyClient()
+try {
+  console.log('Validating Hostfully API key...')
+  await hostfullyClient.validateApiKey()
+  console.log('Hostfully API key ✓')
+} catch (error) {
+  console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(1)
+}
+
 // Start Papi Chulo main process (foreground — blocks until Ctrl+C)
 const SERVICE_LOG = '/tmp/papi-chulo.log'
 console.log(`Starting ${BOT_NAME} main process...`)

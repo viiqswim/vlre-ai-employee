@@ -16,10 +16,12 @@ import type {
 export class HostfullyClient {
   private apiKey: string;
   private baseUrl: string;
+  private agencyUid: string;
 
   constructor(config: HostfullyClientConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
+    this.agencyUid = config.agencyUid;
   }
 
   private get headers(): Record<string, string> {
@@ -210,6 +212,51 @@ export class HostfullyClient {
       );
     }
     await this.updateCustomData(propertyUid, doorCodeField.customDataField.uid, newCode);
+  }
+
+  async validateApiKey(options?: { _retryDelayMs?: number }): Promise<void> {
+    const agencyUid = this.agencyUid || process.env['HOSTFULLY_AGENCY_UID'] || '';
+    const maxAttempts = 3;
+    const retryDelayMs = options?._retryDelayMs ?? 2000;
+    const timeoutMs = 5000;
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(`${this.baseUrl}/webhooks?agencyUid=${encodeURIComponent(agencyUid)}`, {
+            method: 'GET',
+            headers: this.headers,
+            signal: controller.signal,
+          });
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(
+              `Hostfully API key is invalid or unauthorized (${response.status}) — check HOSTFULLY_API_KEY in .env`
+            );
+          }
+          if (!response.ok) {
+            throw new Error(`Hostfully API returned ${response.status} during validation — will retry`);
+          }
+          return;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (error) {
+        lastError = error;
+        const isAuthError = error instanceof Error && (
+          error.message.includes('invalid or unauthorized') ||
+          error.message.includes('401') ||
+          error.message.includes('403')
+        );
+        if (isAuthError) throw error;
+        if (attempt < maxAttempts) {
+          await new Promise<void>((r) => setTimeout(r, retryDelayMs));
+        }
+      }
+    }
+    throw lastError;
   }
 }
 
