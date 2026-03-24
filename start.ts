@@ -2,12 +2,10 @@
 
 import { $, cd } from 'zx'
 import { spawn } from 'node:child_process'
-import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
-import { validateFallbackConfig } from './src/startup-checks.ts'
-import { startProxyHealthMonitor } from './src/proxy-health.ts'
+import { validateOpenRouterConfig } from './src/startup-checks.ts'
 
 // Set working directory to script's own directory (bash equivalent: cd "$SCRIPT_DIR")
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -77,80 +75,7 @@ if (hasTailscale) {
   }
 }
 
-// Port check helper — replaces bash /dev/tcp built-in
-function isPortOpen(host: string, port: number, timeoutMs = 1000): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ host, port })
-    const timer = setTimeout(() => {
-      socket.destroy()
-      resolve(false)
-    }, timeoutMs)
-    socket.on('connect', () => {
-      clearTimeout(timer)
-      socket.destroy()
-      resolve(true)
-    })
-    socket.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
-  })
-}
-
-// Claude proxy — conditional on CLAUDE_MODE=proxy
-// Proxy is intentionally kept alive across service restarts — kill explicitly with:
-//   kill $(lsof -t -i :3456)
-if (process.env['CLAUDE_MODE'] === 'proxy') {
-  const PROXY_HOST = '127.0.0.1'
-  const PROXY_PORT = 3456
-
-  if (await isPortOpen(PROXY_HOST, PROXY_PORT)) {
-    console.log(`Claude proxy already running on :${PROXY_PORT} ✓`)
-  } else {
-    console.log('Starting Claude Max API proxy...')
-
-    // claude-max-api is installed under nodejs 20.19.0 — must specify version explicitly
-    // because this project's .tool-versions uses nodejs 22.21.1 (required for OpenClaw)
-    const proxyProcess = $({
-      env: { ...process.env, ASDF_NODEJS_VERSION: '20.19.0' },
-      nothrow: true,
-      quiet: true,
-    })`claude-max-api`
-
-    // Redirect proxy output to log file (equivalent to: &>/tmp/papi-chulo-proxy.log)
-    const logStream = fs.createWriteStream('/tmp/papi-chulo-proxy.log')
-    proxyProcess.stdout.pipe(logStream)
-    proxyProcess.stderr.pipe(logStream)
-
-    console.log(`Claude proxy PID: ${proxyProcess.child?.pid ?? 'unknown'}`)
-
-    // Wait for proxy to be ready (up to 15s, 0.5s polling interval)
-    const PROXY_TIMEOUT = 15
-    let elapsed = 0
-    console.log(`Waiting for Claude proxy on :${PROXY_PORT}...`)
-    while (elapsed < PROXY_TIMEOUT) {
-      if (await isPortOpen(PROXY_HOST, PROXY_PORT)) {
-        console.log(`Claude proxy ready on :${PROXY_PORT} (${elapsed}s)`)
-        break
-      }
-      await new Promise<void>((r) => setTimeout(r, 500))
-      elapsed++
-    }
-
-    if (elapsed >= PROXY_TIMEOUT) {
-      console.error(`ERROR: Claude proxy did not start within ${PROXY_TIMEOUT}s`)
-      console.error('Check logs: cat /tmp/papi-chulo-proxy.log')
-      process.exit(1)
-    }
-  }
-}
-
-if (process.env['CLAUDE_MODE'] === 'proxy') {
-  startProxyHealthMonitor('127.0.0.1', 3456)
-}
-
-// Validate Claude fallback configuration
-validateFallbackConfig()
+validateOpenRouterConfig()
 
 const { createHostfullyClient } = await import('./skills/hostfully-client/client.ts')
 const hostfullyClient = createHostfullyClient()
