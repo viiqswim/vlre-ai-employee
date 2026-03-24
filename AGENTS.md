@@ -12,13 +12,13 @@ This project uses OpenCode for AI-assisted development. `AGENTS.md` is the prima
 bun test                    # Run tests with bun:test
 bun run typecheck           # TypeScript type checking (src/ and skills/ only — not scripts/)
 bun run scripts/simulate-webhook.ts  # Test pipeline with real Hostfully messages
-bun run start               # Full startup: OpenClaw check → Tailscale Funnel → Claude proxy (if proxy mode) → service
+bun run start               # Full startup: OpenClaw check → Tailscale Funnel → service
 ```
 
 ## Project Structure
 
 ```
-src/                Main service (index.ts entry, webhook-receiver.ts, proxy-health.ts, startup-checks.ts, index.test.ts)
+src/                Main service (index.ts entry, webhook-receiver.ts, startup-checks.ts, index.test.ts)
 skills/             8 OpenClaw skills (pipeline, hostfully-client, kb-reader, slack-bot, slack-blocks, dedup, thread-tracker, audit-logger)
 scripts/            Utilities (register-webhook.ts, simulate-webhook.ts, deregister-webhook.ts, convert-xlsx-to-kb.ts, common-kb-builder.ts)
 docs/               Architecture and security documentation

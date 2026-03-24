@@ -16,7 +16,7 @@ flowchart TD
     WR -->|validate + dedup| PP[Pipeline Processor]
     PP -->|fetch message/lead/property| HF[Hostfully API]
     PP -->|search| KB[knowledge-base/]
-    PP -->|classify + draft| CL[Claude AI via proxy]
+    PP -->|classify + draft| CL[OpenRouter API]
     PP -->|post approval| SL[Slack via Bolt]
     SL --> CS{CS Team}
     CS -->|Approve/Edit| HF
@@ -37,7 +37,7 @@ The OpenClaw agent runs alongside the service, providing the skill execution run
 - **Tailscale** account with Funnel enabled — needed for a stable public webhook URL
 - **Hostfully PMS** account with an API key
 - **Slack workspace** with a bot app configured
-- **Claude access** — either a Claude Max subscription (free via the `claude-max-api` proxy) or an Anthropic API key (pay-per-token)
+- **OpenRouter account** — for AI classification and response drafting. Get an API key at [openrouter.ai](https://openrouter.ai)
 
 ---
 
@@ -54,12 +54,9 @@ bun run start
 `bun run start` handles the full startup sequence via `start.ts`:
 1. Checks the OpenClaw gateway is running (warns if not — non-fatal)
 2. Starts Tailscale Funnel on `WEBHOOK_PORT` and extracts the public URL (skipped if Tailscale isn't installed)
-3. Starts the `claude-max-api` proxy on port 3456 — **only if** `CLAUDE_MODE=proxy` and the proxy isn't already running. Requires `claude-max-api` installed under Node 20.19.0 via asdf.
-4. Warns if `CLAUDE_FALLBACK_TO_API` is enabled but `ANTHROPIC_API_KEY` is not set (non-fatal)
-5. Validates the Hostfully API key by calling the API — **exits immediately** if the key is invalid or returns 401/403
-6. Starts the main service via `bun run src/index.ts`
-
-When `CLAUDE_MODE=proxy`, a background health monitor also runs — it logs `⚠️ Claude proxy is DOWN` and `✅ Claude proxy recovered` as the proxy state changes, without interrupting the service.
+3. Warns if `OPENROUTER_API_KEY` is not set (non-fatal)
+4. Validates the Hostfully API key by calling the API — **exits immediately** if the key is invalid or returns 401/403
+5. Starts the main service via `bun run src/index.ts`
 
 ---
 
@@ -73,13 +70,10 @@ All configuration lives in `.env`. Copy `.env.example` to get started.
 | `HOSTFULLY_API_KEY` | Yes | Found in Hostfully → Agency Settings → API |
 | `HOSTFULLY_AGENCY_UID` | Yes | Your agency UID from Hostfully |
 | `HOSTFULLY_API_URL` | No | Base URL. Default: `https://api.hostfully.com/api/v3.2` |
-| `CLAUDE_MODE` | Yes | `proxy` (Claude Max subscription, free) or `api` (Anthropic API key, pay-per-token) |
-| `CLAUDE_PROXY_URL` | If proxy | Claude proxy URL. Default: `http://127.0.0.1:3456` |
-| `CLAUDE_MODEL` | Yes | Claude model ID (e.g. `claude-sonnet-4-20250514`) |
-| `ANTHROPIC_API_KEY` | If api or fallback | Anthropic API key. Required when `CLAUDE_MODE=api` or when proxy fallback is active (default). |
+| `OPENROUTER_API_KEY` | Yes | OpenRouter API key. Get one at [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `CLAUDE_MODEL` | Yes | OpenRouter model ID (e.g. `minimax/minimax-m2.7`, `anthropic/claude-sonnet-4-20250514`) |
 | `CLAUDE_RETRY_ATTEMPTS` | No | Retry attempts on transient failures. Default: `2` |
 | `CLAUDE_TIMEOUT_MS` | No | Per-request timeout in milliseconds. Default: `30000` |
-| `CLAUDE_FALLBACK_TO_API` | No | Fall back to Anthropic API if proxy unreachable. Requires `ANTHROPIC_API_KEY`. Enabled by default — set to `false` to disable. |
 | `SLACK_BOT_TOKEN` | Yes | `xoxb-...` bot token |
 | `SLACK_APP_TOKEN` | Yes | `xapp-...` Socket Mode token |
 | `SLACK_CHANNEL_ID` | Yes | Channel ID (e.g. `C0XXXXXXXXX`) where approvals are posted |

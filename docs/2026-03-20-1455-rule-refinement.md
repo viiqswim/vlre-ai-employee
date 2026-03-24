@@ -155,7 +155,7 @@ Claude is instructed to incorporate `REFINED_TEXT` and `CONDITIONS` into a conci
 }
 ```
 
-The scope is preserved from the original unless the conditions suggest narrowing it to a specific property. `callClaude()` — a generic utility extracted from `skills/pipeline/real-time-analyzer.ts` — handles both proxy mode (`CLAUDE_MODE=proxy`) and direct API mode (`CLAUDE_MODE=api`).
+The scope is preserved from the original unless the conditions suggest narrowing it to a specific property. `callClaude()` — a generic utility extracted from `skills/pipeline/real-time-analyzer.ts` — calls OpenRouter directly using `OPENROUTER_API_KEY`.
 
 ---
 
