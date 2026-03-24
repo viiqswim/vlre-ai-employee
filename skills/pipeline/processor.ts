@@ -290,8 +290,8 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
   const retryAttempts = parseInt(process.env['CLAUDE_RETRY_ATTEMPTS'] ?? '2', 10);
   const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
 
-   const userMessage = buildUserMessage(params);
-    const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(getConfirmedRules(), params.propertyName);
+  const userMessage = buildUserMessage(params);
+  const fullPrompt = SYSTEM_PROMPT + buildLearnedRulesPrompt(getConfirmedRules(), params.propertyName);
 
   let responseText = '';
   let useApiMode = mode !== 'proxy';
