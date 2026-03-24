@@ -6,6 +6,7 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
+import { validateFallbackConfig } from './src/startup-checks.ts'
 
 // Set working directory to script's own directory (bash equivalent: cd "$SCRIPT_DIR")
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -130,6 +131,9 @@ if (process.env['CLAUDE_MODE'] === 'proxy') {
     }
   }
 }
+
+// Validate Claude fallback configuration
+validateFallbackConfig()
 
 const { createHostfullyClient } = await import('./skills/hostfully-client/client.ts')
 const hostfullyClient = createHostfullyClient()
