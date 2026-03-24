@@ -189,16 +189,12 @@ let originalFetch: typeof global.fetch;
 
 beforeEach(() => {
   originalFetch = global.fetch;
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
-  delete process.env['ANTHROPIC_API_KEY'];
+  process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 });
 
 afterEach(() => {
   global.fetch = originalFetch;
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
-  delete process.env['ANTHROPIC_API_KEY'];
+  delete process.env['OPENROUTER_API_KEY'];
 });
 
 describe('buildApprovalBlocks — door code and lock features', () => {

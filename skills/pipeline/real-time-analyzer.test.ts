@@ -34,16 +34,17 @@ beforeAll(async () => {
 const mockFetch = mock(async (_url: string, _opts?: RequestInit) => {
   return new Response(
     JSON.stringify({
-      content: [
+      choices: [
         {
-          type: 'text',
-          text: JSON.stringify({
-            pattern: 'AI uses numbered lists',
-            correction: 'Write in flowing prose not numbered lists',
-            scope: 'global',
-            skip: false,
-            skipReason: null,
-          }),
+          message: {
+            content: JSON.stringify({
+              pattern: 'AI uses numbered lists',
+              correction: 'Write in flowing prose not numbered lists',
+              scope: 'global',
+              skip: false,
+              skipReason: null,
+            }),
+          },
         },
       ],
     }),
@@ -58,8 +59,7 @@ beforeEach(() => {
   mockLoadRules.mockReset();
   mockGetConfirmedRules.mockReset();
   global.fetch = mockFetch as unknown as typeof fetch;
-  process.env['CLAUDE_MODE'] = 'api';
-  process.env['ANTHROPIC_API_KEY'] = 'test-key';
+  process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 });
 
 describe('analyzeEditInBackground', () => {
@@ -103,15 +103,16 @@ describe('analyzeEditInBackground', () => {
       async () =>
         new Response(
           JSON.stringify({
-            content: [
+            choices: [
               {
-                type: 'text',
-                text: JSON.stringify({
-                  pattern: 'Test pattern',
-                  correction: 'Test correction',
-                  scope: 'global',
-                  skip: false,
-                }),
+                message: {
+                  content: JSON.stringify({
+                    pattern: 'Test pattern',
+                    correction: 'Test correction',
+                    scope: 'global',
+                    skip: false,
+                  }),
+                },
               },
             ],
           }),

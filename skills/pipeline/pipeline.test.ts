@@ -81,10 +81,12 @@ let originalFetch: typeof global.fetch;
 
 beforeEach(() => {
   originalFetch = global.fetch;
+  process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 });
 
 afterEach(() => {
   global.fetch = originalFetch;
+  delete process.env['OPENROUTER_API_KEY'];
 });
 
 test('ignores non-NEW_INBOX_MESSAGE events', async () => {
@@ -163,9 +165,6 @@ test('full pipeline: posts approval message to Slack on success', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
-
   const context = makeContext();
   const payload = makePayload();
 
@@ -181,9 +180,6 @@ test('full pipeline: posts approval message to Slack on success', async () => {
 
   const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
   expect(trackCalls.length).toBe(1);
-
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
 });
 
 test('KB search is called with property name', async () => {
@@ -211,8 +207,8 @@ test('KB search is called with property name', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const searchMock = mock((_q: string, _p?: string) => '## WiFi\nNetwork: PapiWifi\nPassword: Papi2024');
   const context = makeContext({
@@ -225,8 +221,8 @@ test('KB search is called with property name', async () => {
   expect(typeof searchMock.mock.calls[0]?.[0]).toBe('string');
   expect(searchMock.mock.calls[0]?.[1]).toBe('Lakewood Retreat');
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('posts as thread reply when pending thread exists', async () => {
@@ -254,8 +250,8 @@ test('posts as thread reply when pending thread exists', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const context = makeContext({
     threadTracker: {
@@ -282,8 +278,8 @@ test('posts as thread reply when pending thread exists', async () => {
   const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
   expect(trackCalls.length).toBe(1);
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('supersedes old approval block when pending exists', async () => {
@@ -311,8 +307,8 @@ test('supersedes old approval block when pending exists', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const context = makeContext({
     threadTracker: {
@@ -339,8 +335,8 @@ test('supersedes old approval block when pending exists', async () => {
   expect(trackCalls[0]?.[0]).toBe('thread-001');
   expect(trackCalls[0]?.[3]).toBe('msg-001');
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('continues posting new block when chat.update fails', async () => {
@@ -368,8 +364,8 @@ test('continues posting new block when chat.update fails', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const context = makeContext({
     slackApp: {
@@ -392,8 +388,8 @@ test('continues posting new block when chat.update fails', async () => {
   const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
   expect(postCalls.length).toBe(1);
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('does not call chat.update when no pending exists', async () => {
@@ -421,8 +417,8 @@ test('does not call chat.update when no pending exists', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const context = makeContext();
 
@@ -437,8 +433,8 @@ test('does not call chat.update when no pending exists', async () => {
   const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
   expect(trackCalls.length).toBe(1);
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('calls track() with messageUid on every successful post', async () => {
@@ -466,8 +462,8 @@ test('calls track() with messageUid on every successful post', async () => {
     } as Response)
   ) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const context = makeContext({
     threadTracker: {
@@ -486,15 +482,15 @@ test('calls track() with messageUid on every successful post', async () => {
   expect(trackCalls[0]?.[2]).toBe('C0TEST');
   expect(trackCalls[0]?.[3]).toBe('msg-001');
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('posts manual review to Slack when Claude call fails', async () => {
   global.fetch = mock(() => Promise.reject(new Error('proxy down'))) as unknown as typeof global.fetch;
 
-  process.env['CLAUDE_MODE'] = 'proxy';
-  process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+  void 0;
+  void 0;
 
   const context = makeContext();
   await processWebhookMessage(makePayload(), context);
@@ -505,8 +501,8 @@ test('posts manual review to Slack when Claude call fails', async () => {
   const text = (postCalls[0]?.[0] as { text: string }).text;
   expect(text).toContain('Manual Review Required');
 
-  delete process.env['CLAUDE_MODE'];
-  delete process.env['CLAUDE_PROXY_URL'];
+  void 0;
+  void 0;
 });
 
 test('posts error to Slack when getMessage fails', async () => {
@@ -628,137 +624,17 @@ describe('withRetry', () => {
   });
 });
 
-describe('proxy→API fallback', () => {
-  test('falls back to Anthropic API when proxy fails and CLAUDE_FALLBACK_TO_API=true', async () => {
-    global.fetch = mock(async (url: string | Request) => {
-      const urlStr = typeof url === 'string' ? url : url.url;
+test('posts Manual Review when OpenRouter fails', async () => {
+  global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
 
-      if (typeof urlStr === 'string' && urlStr.includes('api.anthropic.com')) {
-        return {
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    classification: 'general_inquiry',
-                    confidence: 0.9,
-                    suggestedResponse: 'Hello!',
-                    reasoning: 'test',
-                  }),
-                },
-              ],
-            }),
-        } as Response;
-      }
+  const context = makeContext();
+  await processWebhookMessage(makePayload(), context);
 
-      throw new TypeError('fetch failed');
-    }) as unknown as typeof global.fetch;
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_FALLBACK_TO_API'] = 'true';
-    process.env['ANTHROPIC_API_KEY'] = 'test-key-123';
-
-    const context = makeContext();
-    await processWebhookMessage(makePayload(), context);
-
-    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
-    expect(postCalls.length).toBe(1);
-
-    const firstCallArg = postCalls[0]?.[0] as { text?: string; blocks?: unknown[] };
-    const hasManualReview = firstCallArg?.text?.includes('Manual Review Required') ?? false;
-    expect(hasManualReview).toBe(false);
-
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_FALLBACK_TO_API'];
-    delete process.env['ANTHROPIC_API_KEY'];
-  });
-
-  test('falls back to API by default when proxy fails and ANTHROPIC_API_KEY is set', async () => {
-    global.fetch = mock(async (url: string | Request) => {
-      const urlStr = typeof url === 'string' ? url : url.url;
-
-      if (typeof urlStr === 'string' && urlStr.includes('api.anthropic.com')) {
-        return {
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    classification: 'general_inquiry',
-                    confidence: 0.9,
-                    suggestedResponse: 'Hello!',
-                    reasoning: 'test',
-                  }),
-                },
-              ],
-            }),
-        } as Response;
-      }
-
-      throw new TypeError('fetch failed');
-    }) as unknown as typeof global.fetch;
-
-    process.env['CLAUDE_MODE'] = 'proxy';
-    delete process.env['CLAUDE_FALLBACK_TO_API'];
-    process.env['ANTHROPIC_API_KEY'] = 'test-key-123';
-
-    const context = makeContext();
-    await processWebhookMessage(makePayload(), context);
-
-    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
-    expect(postCalls.length).toBe(1);
-
-    const firstCallArg = postCalls[0]?.[0] as { text?: string; blocks?: unknown[] };
-    const hasManualReview = firstCallArg?.text?.includes('Manual Review Required') ?? false;
-    expect(hasManualReview).toBe(false);
-
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['ANTHROPIC_API_KEY'];
-  });
-
-  test('does NOT fall back when CLAUDE_FALLBACK_TO_API=false', async () => {
-    global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
-
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_FALLBACK_TO_API'] = 'false';
-
-    const context = makeContext();
-    await processWebhookMessage(makePayload(), context);
-
-    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
-    expect(postCalls.length).toBe(1);
-
-    const text = (postCalls[0]?.[0] as { text: string }).text;
-    expect(text).toContain('Manual Review Required');
-
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_FALLBACK_TO_API'];
-  });
-
-  test('posts Manual Review when both proxy and API fallback fail', async () => {
-    global.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof global.fetch;
-
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_FALLBACK_TO_API'] = 'true';
-    process.env['ANTHROPIC_API_KEY'] = 'test-key-123';
-
-    const context = makeContext();
-    await processWebhookMessage(makePayload(), context);
-
-    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
-    expect(postCalls.length).toBe(1);
-
-    const text = (postCalls[0]?.[0] as { text: string }).text;
-    expect(text).toContain('Manual Review Required');
-
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_FALLBACK_TO_API'];
-    delete process.env['ANTHROPIC_API_KEY'];
-  });
+  const text = (postCalls[0]?.[0] as { text: string }).text;
+  expect(text).toContain('Manual Review Required');
 });
 
 describe('parseClassifyResponse', () => {
@@ -888,8 +764,8 @@ describe('notionSearch integration', () => {
 
   test('pipeline without notionSearch completes successfully (backward compatible)', async () => {
     global.fetch = makeSuccessFetch();
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const context = makeContext();
     await processWebhookMessage(makePayload(), context);
@@ -897,14 +773,14 @@ describe('notionSearch integration', () => {
     const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
     expect(postCalls.length).toBe(1);
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 
   test('pipeline with notionSearch that throws: completes with KB context only (warning logged)', async () => {
     global.fetch = makeSuccessFetch();
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const mockNotionSearch = {
       search: mock(() => Promise.reject(new Error('Notion DB unavailable'))),
@@ -919,8 +795,8 @@ describe('notionSearch integration', () => {
     expect((mockNotionSearch.search as ReturnType<typeof mock>).mock.calls.length).toBe(1);
     expect((mockNotionSearch.formatAsContext as ReturnType<typeof mock>).mock.calls.length).toBe(0);
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 
   test('pipeline with notionSearch returning results: knowledgeBase passed to Claude includes Additional Context section', async () => {
@@ -957,8 +833,8 @@ describe('notionSearch integration', () => {
       } as Response);
     }) as unknown as typeof global.fetch;
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const mockNotionSearch = {
       search: mock(() => Promise.resolve([{ heading: 'Pets Policy', content: 'No pets allowed.', pageTitle: 'House Rules', score: 0.9 }])),
@@ -975,8 +851,8 @@ describe('notionSearch integration', () => {
     expect(capturedKnowledgeBase).toContain('Additional Context (Company Wiki)');
     expect(capturedKnowledgeBase).toContain('No pets allowed.');
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 });
 
@@ -1025,8 +901,8 @@ describe('conversation history', () => {
       } as Response),
     ) as unknown as typeof global.fetch;
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const context = makeContext({
       hostfullyClient: {
@@ -1063,8 +939,8 @@ describe('conversation history', () => {
     const summaryBlock = blocks.find((b) => b.type === 'section' && b.text?.text?.includes('Conversation so far'));
     expect(summaryBlock).toBeDefined();
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 
   test('filters messages to matching threadUid only', async () => {
@@ -1093,8 +969,8 @@ describe('conversation history', () => {
       } as Response),
     ) as unknown as typeof global.fetch;
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const context = makeContext({
       hostfullyClient: {
@@ -1134,8 +1010,8 @@ describe('conversation history', () => {
     expect(blocksStr).not.toContain('FROM_OTHER_THREAD');
     expect(blocksStr).toContain('FROM_CORRECT_THREAD');
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 
   test('excludes the current message (message_uid) from conversation history', async () => {
@@ -1164,8 +1040,8 @@ describe('conversation history', () => {
       } as Response),
     ) as unknown as typeof global.fetch;
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const context = makeContext({
       hostfullyClient: {
@@ -1203,8 +1079,8 @@ describe('conversation history', () => {
     expect(JSON.stringify(blocks)).toContain('PRIOR_MESSAGE_CONTENT');
     expect(summaryBlock?.text?.text).not.toContain('CURRENT_MESSAGE_CONTENT');
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 
   test('continues pipeline when getMessages throws', async () => {
@@ -1233,8 +1109,8 @@ describe('conversation history', () => {
       } as Response),
     ) as unknown as typeof global.fetch;
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const context = makeContext({
       hostfullyClient: {
@@ -1248,8 +1124,8 @@ describe('conversation history', () => {
     const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
     expect(postCalls.length).toBe(1);
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 
   test('does not call getMessages when leadUid is empty', async () => {
@@ -1278,8 +1154,8 @@ describe('conversation history', () => {
       } as Response),
     ) as unknown as typeof global.fetch;
 
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    void 0;
+    void 0;
 
     const getMessagesMock = mock(() => Promise.resolve([]));
 
@@ -1296,7 +1172,7 @@ describe('conversation history', () => {
 
     expect(getMessagesMock.mock.calls.length).toBe(0);
 
-    delete process.env['CLAUDE_MODE'];
-    delete process.env['CLAUDE_PROXY_URL'];
+    void 0;
+    void 0;
   });
 });
