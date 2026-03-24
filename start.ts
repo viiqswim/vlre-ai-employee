@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import { validateFallbackConfig } from './src/startup-checks.ts'
+import { startProxyHealthMonitor } from './src/proxy-health.ts'
 
 // Set working directory to script's own directory (bash equivalent: cd "$SCRIPT_DIR")
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -130,6 +131,10 @@ if (process.env['CLAUDE_MODE'] === 'proxy') {
       process.exit(1)
     }
   }
+}
+
+if (process.env['CLAUDE_MODE'] === 'proxy') {
+  startProxyHealthMonitor('127.0.0.1', 3456)
 }
 
 // Validate Claude fallback configuration
