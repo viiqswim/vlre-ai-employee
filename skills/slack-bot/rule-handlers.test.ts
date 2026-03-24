@@ -1,4 +1,4 @@
-import { test, expect, beforeEach } from 'bun:test';
+import { test, expect, beforeEach, spyOn } from 'bun:test';
 import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import type { App } from '@slack/bolt';
 import type { LearnedRule } from '../pipeline/learned-rules.ts';
@@ -103,6 +103,24 @@ function buildMockApp(): {
   } as unknown as App;
 
   return { app, actionHandlers, viewHandlers, postMessageCalls, chatUpdateCalls, viewsOpenCalls, postEphemeralCalls, client: client as unknown };
+}
+
+function buildSlackErrorClient() {
+  return {
+    chat: {
+      postMessage: async () => ({ ok: true }),
+      update: async () => {
+        throw Object.assign(
+          new Error('An API error occurred: message_not_found'),
+          { code: 'slack_webapi_platform_error', data: { ok: false, error: 'message_not_found' } },
+        );
+      },
+      postEphemeral: async () => ({ ok: true }),
+    },
+    views: {
+      open: async () => ({ ok: true }),
+    },
+  };
 }
 
 beforeEach(() => {
@@ -412,4 +430,238 @@ test('reject_refined_rule: rejects rule and calls chat.update', async () => {
 
   expect(updated?.status).toBe('rejected');
   expect(chatUpdateCalls.length).toBe(1);
+});
+
+test('approve_rule: rule is confirmed even when chat.update throws message_not_found', async () => {
+  const rule = makeRule({ id: 'rule-approve-err-1', status: 'proposed' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('approve_rule')!;
+  expect(handler).toBeDefined();
+
+  const ackCalls: AckCall[] = [];
+  const ack = (async (...args: unknown[]) => { ackCalls.push({ args }); }) as unknown as AckFn;
+
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-approve-err-1' }) }],
+    user: { id: 'U123' },
+    channel: { id: 'C999' },
+    message: {
+      ts: '1234567890.000',
+      blocks: [
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              action_id: 'approve_rule',
+              value: JSON.stringify({ ruleId: 'rule-approve-err-1' }),
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+  await handler({ ack, body, client: buildSlackErrorClient() as unknown });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-approve-err-1');
+
+  expect(updated?.status).toBe('confirmed');
+  expect(ackCalls.length).toBe(1);
+  expect(warnSpy.mock.calls.some((call) => {
+    const msg = String(call[0]);
+    return msg.includes('approve_rule') && msg.includes('(non-blocking)');
+  })).toBe(true);
+  warnSpy.mockRestore();
+});
+
+test('reject_rule: rule is rejected even when chat.update throws message_not_found', async () => {
+  const rule = makeRule({ id: 'rule-rej-err-1', status: 'proposed' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('reject_rule')!;
+  expect(handler).toBeDefined();
+
+  const ackCalls: AckCall[] = [];
+  const ack = (async (...args: unknown[]) => { ackCalls.push({ args }); }) as unknown as AckFn;
+
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-rej-err-1' }) }],
+    user: { id: 'U999' },
+    channel: { id: 'C999' },
+    message: {
+      ts: '1234567890.000',
+      blocks: [
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              action_id: 'reject_rule',
+              value: JSON.stringify({ ruleId: 'rule-rej-err-1' }),
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+  await handler({ ack, body, client: buildSlackErrorClient() as unknown });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-rej-err-1');
+
+  expect(updated?.status).toBe('rejected');
+  expect(ackCalls.length).toBe(1);
+  expect(warnSpy.mock.calls.some((call) => {
+    const msg = String(call[0]);
+    return msg.includes('reject_rule') && msg.includes('(non-blocking)');
+  })).toBe(true);
+  warnSpy.mockRestore();
+});
+
+test('refine_rule: rule set to pending_refinement even when chat.update throws message_not_found', async () => {
+  const rule = makeRule({ id: 'rule-refine-err-1', status: 'proposed' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('refine_rule')!;
+  expect(handler).toBeDefined();
+
+  const ackCalls: AckCall[] = [];
+  const ack = (async (...args: unknown[]) => { ackCalls.push({ args }); }) as unknown as AckFn;
+
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-refine-err-1' }) }],
+    user: { id: 'U123' },
+    trigger_id: 'trigger-err-123',
+    channel: { id: 'C999' },
+    message: {
+      ts: '1234567890.000',
+      blocks: [
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              action_id: 'refine_rule',
+              value: JSON.stringify({ ruleId: 'rule-refine-err-1' }),
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+  await handler({ ack, body, client: buildSlackErrorClient() as unknown });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-refine-err-1');
+
+  expect(updated?.status).toBe('pending_refinement');
+  expect(ackCalls.length).toBe(1);
+  expect(warnSpy.mock.calls.some((call) => {
+    const msg = String(call[0]);
+    return msg.includes('refine_rule') && msg.includes('(non-blocking)');
+  })).toBe(true);
+  warnSpy.mockRestore();
+});
+
+test('accept_refined_rule: rule is confirmed even when chat.update throws message_not_found', async () => {
+  const rule = makeRule({ id: 'rule-accept-err-1', status: 'pending_refinement' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('accept_refined_rule')!;
+  expect(handler).toBeDefined();
+
+  const ackCalls: AckCall[] = [];
+  const ack = (async (...args: unknown[]) => { ackCalls.push({ args }); }) as unknown as AckFn;
+
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-accept-err-1' }) }],
+    user: { id: 'U123' },
+    channel: { id: 'C999' },
+    message: { ts: '1234567890.000', blocks: [] },
+  };
+
+  const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+  await handler({ ack, body, client: buildSlackErrorClient() as unknown });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-accept-err-1');
+
+  expect(updated?.status).toBe('confirmed');
+  expect(updated?.confirmedAt).toBeDefined();
+  expect(ackCalls.length).toBe(1);
+  expect(warnSpy.mock.calls.some((call) => {
+    const msg = String(call[0]);
+    return msg.includes('accept_refined_rule') && msg.includes('(non-blocking)');
+  })).toBe(true);
+  warnSpy.mockRestore();
+});
+
+test('reject_refined_rule: rule is rejected even when chat.update throws message_not_found', async () => {
+  const rule = makeRule({ id: 'rule-reject-err-1', status: 'pending_refinement' });
+  writeTestRules([rule]);
+  invalidateCache();
+
+  const { app, actionHandlers } = buildMockApp();
+  const { registerRuleHandlers } = await import('./rule-handlers.ts');
+  registerRuleHandlers(app);
+
+  const handler = actionHandlers.get('reject_refined_rule')!;
+  expect(handler).toBeDefined();
+
+  const ackCalls: AckCall[] = [];
+  const ack = (async (...args: unknown[]) => { ackCalls.push({ args }); }) as unknown as AckFn;
+
+  const body = {
+    actions: [{ value: JSON.stringify({ ruleId: 'rule-reject-err-1' }) }],
+    user: { id: 'U123' },
+    channel: { id: 'C999' },
+    message: { ts: '1234567890.000', blocks: [] },
+  };
+
+  const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+  await handler({ ack, body, client: buildSlackErrorClient() as unknown });
+
+  invalidateCache();
+  const rules = loadRules();
+  const updated = rules.find((r) => r.id === 'rule-reject-err-1');
+
+  expect(updated?.status).toBe('rejected');
+  expect(ackCalls.length).toBe(1);
+  expect(warnSpy.mock.calls.some((call) => {
+    const msg = String(call[0]);
+    return msg.includes('reject_refined_rule') && msg.includes('(non-blocking)');
+  })).toBe(true);
+  warnSpy.mockRestore();
 });
