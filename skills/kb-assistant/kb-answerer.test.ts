@@ -69,8 +69,7 @@ describe('askKBAssistant timeout', () => {
 
   test("uses CLAUDE_TIMEOUT_MS env var when set", async () => {
     process.env['CLAUDE_TIMEOUT_MS'] = '5000';
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 
     let capturedTimeoutMs = 0;
     const origSetTimeout = globalThis.setTimeout;
@@ -93,8 +92,7 @@ describe('askKBAssistant timeout', () => {
 
   test("defaults to 30000ms when CLAUDE_TIMEOUT_MS not set", async () => {
     delete process.env['CLAUDE_TIMEOUT_MS'];
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 
     let capturedTimeoutMs = 0;
     const origSetTimeout = globalThis.setTimeout;
@@ -116,8 +114,7 @@ describe('askKBAssistant timeout', () => {
   });
 
   test("handles abort error gracefully", async () => {
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 
     (globalThis.fetch as any) = async () => {
       const error = new Error('The operation was aborted');
@@ -146,8 +143,7 @@ describe('formatKBEntry', () => {
   });
 
   test("returns fallback when fetch throws", async () => {
-    process.env['CLAUDE_MODE'] = 'proxy';
-    process.env['CLAUDE_PROXY_URL'] = 'http://127.0.0.1:3456';
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 
     (globalThis.fetch as any) = async () => {
       throw new Error('Network error');
@@ -161,8 +157,7 @@ describe('formatKBEntry', () => {
   });
 
   test("fallback includes question and answer", async () => {
-    process.env['CLAUDE_MODE'] = 'api';
-    delete process.env['ANTHROPIC_API_KEY'];
+    delete process.env['OPENROUTER_API_KEY'];
 
     const result = await formatKBEntry('What is the WiFi?', 'Network: Patitos-2g');
     expect(result.entry).toBeTruthy();
