@@ -527,6 +527,27 @@ test('posts error to Slack when getMessage fails', async () => {
   expect(Array.isArray(args?.blocks)).toBe(true);
 });
 
+test('posts authentication failed error to Slack when getMessage returns 401', async () => {
+  const context = makeContext({
+    hostfullyClient: {
+      ...makeContext().hostfullyClient,
+      getMessage: mock(() =>
+        Promise.reject(new Error('Hostfully API authentication failed (401) — check that HOSTFULLY_API_KEY is valid and has not been rotated'))
+      ),
+    } as unknown as HostfullyClient,
+  });
+
+  await processWebhookMessage(makePayload(), context);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const args = postCalls[0]?.[0] as { blocks: unknown[]; text: string };
+  expect(Array.isArray(args?.blocks)).toBe(true);
+  const blockContent = JSON.stringify(args.blocks);
+  expect(blockContent).toMatch(/authentication failed/i);
+});
+
 describe('withRetry', () => {
   test('retries on TypeError("fetch failed") — Bun network error', async () => {
     let callCount = 0;
