@@ -22,7 +22,7 @@ export async function askKBAssistant(question: string, kbContext: string): Promi
   if (!openRouterKey) { console.warn('[KB-ASSISTANT] OPENROUTER_API_KEY not set'); return { found: false, answer: null, source: null }; }
   const openRouterBaseUrl = (process.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
   const model = process.env['OPENROUTER_MODEL'] ?? 'minimax/minimax-m2.7';
-  const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
+  const timeoutMs = parseInt(process.env['OPENROUTER_TIMEOUT_MS'] ?? '30000', 10);
   const userMessage = '## Question\n' + question + '\n\n## Knowledge Base Context\n' + kbContext;
 
   try {
@@ -69,7 +69,7 @@ export async function formatKBEntry(question: string, rawAnswer: string): Promis
   const openRouterKey = process.env['OPENROUTER_API_KEY'];
   const openRouterBaseUrl = (process.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
   const model = process.env['OPENROUTER_MODEL'] ?? 'minimax/minimax-m2.7';
-  const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
+  const timeoutMs = parseInt(process.env['OPENROUTER_TIMEOUT_MS'] ?? '30000', 10);
 
   const fallback = (): FormatKBEntryResult => {
     const title = rawAnswer.substring(0, 60);

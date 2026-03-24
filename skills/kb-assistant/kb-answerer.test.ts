@@ -67,8 +67,8 @@ describe('askKBAssistant timeout', () => {
     process.env = origEnv;
   });
 
-  test("uses CLAUDE_TIMEOUT_MS env var when set", async () => {
-    process.env['CLAUDE_TIMEOUT_MS'] = '5000';
+  test("uses OPENROUTER_TIMEOUT_MS env var when set", async () => {
+    process.env['OPENROUTER_TIMEOUT_MS'] = '5000';
     process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 
     let capturedTimeoutMs = 0;
@@ -90,8 +90,8 @@ describe('askKBAssistant timeout', () => {
     }
   });
 
-  test("defaults to 30000ms when CLAUDE_TIMEOUT_MS not set", async () => {
-    delete process.env['CLAUDE_TIMEOUT_MS'];
+  test("defaults to 30000ms when OPENROUTER_TIMEOUT_MS not set", async () => {
+    delete process.env['OPENROUTER_TIMEOUT_MS'];
     process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
 
     let capturedTimeoutMs = 0;

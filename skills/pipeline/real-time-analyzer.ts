@@ -139,7 +139,7 @@ export async function callClaude(systemPrompt: string, userMessage: string): Pro
   }
   const openRouterBaseUrl = (process.env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
   const model = process.env['OPENROUTER_MODEL'] ?? 'minimax/minimax-m2.7';
-  const timeoutMs = parseInt(process.env['CLAUDE_TIMEOUT_MS'] ?? '30000', 10);
+  const timeoutMs = parseInt(process.env['OPENROUTER_TIMEOUT_MS'] ?? '30000', 10);
 
   try {
     const response = await fetch(`${openRouterBaseUrl}/chat/completions`, {
