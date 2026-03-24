@@ -13,18 +13,30 @@ import { startProxyHealthMonitor } from './src/proxy-health.ts'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 cd(__dirname)
 
-// Read config from environment (Bun auto-loads .env, so process.env has all values)
-const BOT_NAME = process.env['BOT_NAME'] || 'Papi Chulo'
-// Use || not ?? — handles empty string (WEBHOOK_PORT= in .env gives empty string, not undefined)
-const WEBHOOK_PORT = process.env['WEBHOOK_PORT'] || '48901'
-
-console.log(`Starting ${BOT_NAME}...`)
-
 // Check .env exists — hard exit if missing
 if (!fs.existsSync('.env')) {
   console.error('ERROR: .env file not found. Copy .env.example and fill in your values.')
   process.exit(1)
 }
+
+// Load .env into process.env (start.ts runs under zx/Node — it does NOT auto-load .env like Bun does)
+// This must happen before reading any env vars below.
+for (const line of fs.readFileSync('.env', 'utf-8').split('\n')) {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.startsWith('#')) continue
+  const eqIdx = trimmed.indexOf('=')
+  if (eqIdx === -1) continue
+  const key = trimmed.slice(0, eqIdx).trim()
+  const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '')
+  if (key && !(key in process.env)) process.env[key] = val
+}
+
+// Read config from environment
+const BOT_NAME = process.env['BOT_NAME'] || 'Papi Chulo'
+// Use || not ?? — handles empty string (WEBHOOK_PORT= in .env gives empty string, not undefined)
+const WEBHOOK_PORT = process.env['WEBHOOK_PORT'] || '48901'
+
+console.log(`Starting ${BOT_NAME}...`)
 
 // OpenClaw gateway health check — WARN ONLY, non-fatal (equivalent to: curl -sf ... &>/dev/null)
 try {
