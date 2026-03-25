@@ -326,6 +326,9 @@ export async function callClaude(params: ClassifyParams): Promise<ClassifyResult
     throw new Error(`[PIPELINE] OpenRouter API connection failed: ${msg}`);
   }
 
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`OpenRouter authentication failed (${response.status}) — check that OPENROUTER_API_KEY is valid and has not been rotated`);
+  }
   if (!response.ok) {
     throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
   }
@@ -609,9 +612,13 @@ async function postManualReviewToSlack(
   },
 ): Promise<void> {
   try {
+    const isAuthError = /authentication failed|unauthorized/i.test(params.error);
+    const reason = isAuthError
+      ? `🔑 AI authentication failed — the OPENROUTER_API_KEY needs to be rotated. All guest messages will fail until fixed.`
+      : `Classification failed — ${params.error}`;
     await app.client.chat.postMessage({
       channel: channelId,
-      text: `⚠️ *Manual Review Required*\n*Guest:* ${params.guestName} at ${params.propertyName}\n*Message:* ${params.messageContent}\n*Reason:* Classification failed — ${params.error}\n*Thread UID:* ${params.threadUid}`,
+      text: `⚠️ *Manual Review Required*\n*Guest:* ${params.guestName} at ${params.propertyName}\n*Message:* ${params.messageContent}\n*Reason:* ${reason}\n*Thread UID:* ${params.threadUid}`,
     });
   } catch (e) {
     console.error('[PIPELINE] Failed to post manual review to Slack:', e);

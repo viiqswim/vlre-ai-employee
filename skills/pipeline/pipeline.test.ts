@@ -637,6 +637,38 @@ test('posts Manual Review when OpenRouter fails', async () => {
   expect(text).toContain('Manual Review Required');
 });
 
+test('posts 🔑 key rotation guidance when OpenRouter returns 401', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve(new Response(null, { status: 401, statusText: 'Unauthorized' })),
+  ) as unknown as typeof global.fetch;
+
+  const context = makeContext();
+  await processWebhookMessage(makePayload(), context);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const text = (postCalls[0]?.[0] as { text: string }).text;
+  expect(text).toContain('🔑');
+  expect(text).toContain('OPENROUTER_API_KEY');
+});
+
+test('posts generic Classification failed message when OpenRouter returns 500', async () => {
+  global.fetch = mock(() =>
+    Promise.resolve(new Response(null, { status: 500, statusText: 'Internal Server Error' })),
+  ) as unknown as typeof global.fetch;
+
+  const context = makeContext();
+  await processWebhookMessage(makePayload(), context);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const text = (postCalls[0]?.[0] as { text: string }).text;
+  expect(text).toContain('Classification failed');
+  expect(text).not.toContain('🔑');
+});
+
 describe('parseClassifyResponse', () => {
   test('parses urgency:true from JSON response', () => {
     const json = JSON.stringify({
