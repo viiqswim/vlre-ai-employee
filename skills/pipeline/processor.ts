@@ -598,6 +598,22 @@ async function postErrorToSlack(
   }
 }
 
+export async function postFetchWarningToSlack(
+  app: App,
+  channelId: string,
+  errorMessage: string,
+  messageUid: string,
+): Promise<void> {
+  try {
+    await app.client.chat.postMessage({
+      channel: channelId,
+      text: `⚠️ *Could not process incoming message* — ${errorMessage} (message: ${messageUid})\n_This may be a transient Hostfully API issue. The message will be retried on the next webhook delivery._`,
+    });
+  } catch (e) {
+    console.error('[PIPELINE] Failed to post fetch warning to Slack:', e);
+  }
+}
+
 async function postManualReviewToSlack(
   app: App,
   channelId: string,

@@ -1,5 +1,5 @@
 import { test, expect, mock, beforeEach, afterEach, spyOn, describe } from 'bun:test';
-import { processWebhookMessage, parseClassifyResponse, buildLearnedRulesPrompt, SYSTEM_PROMPT } from './processor.ts';
+import { processWebhookMessage, parseClassifyResponse, buildLearnedRulesPrompt, SYSTEM_PROMPT, postFetchWarningToSlack } from './processor.ts';
 import type { PipelineContext, WebhookPayload } from './processor.ts';
 import type { HostfullyClient } from '../hostfully-client/client.ts';
 import type { MultiPropertyKBReader } from '../kb-reader/multi-reader.ts';
@@ -8,6 +8,7 @@ import type { App } from '@slack/bolt';
 import { withRetry, isRetryableError } from './retry.js';
 import type { LearnedRule } from './learned-rules.ts';
 import type { NotionSearcher } from '../notion-search/notion-search.js';
+import { buildErrorBlocks } from '../slack-blocks/blocks.ts';
 
 function makePayload(overrides: Partial<WebhookPayload> = {}): WebhookPayload {
   return {
@@ -667,6 +668,36 @@ test('posts generic Classification failed message when OpenRouter returns 500', 
   const text = (postCalls[0]?.[0] as { text: string }).text;
   expect(text).toContain('Classification failed');
   expect(text).not.toContain('🔑');
+});
+
+test('postFetchWarningToSlack produces ⚠️ copy without Send failed', async () => {
+  const mockApp = {
+    client: {
+      chat: {
+        postMessage: mock(() => Promise.resolve({ ok: true, ts: '1234567890.000001' })),
+      },
+    },
+  } as unknown as App;
+
+  await postFetchWarningToSlack(mockApp, 'C0TEST', 'Failed to fetch message: 503 Service Unavailable', 'msg-001');
+
+  const postCalls = (mockApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const message = postCalls[0]?.[0] as { text: string };
+  expect(message.text).toContain('⚠️');
+  expect(message.text).toContain('Could not process incoming message');
+  expect(message.text).not.toContain('Send failed');
+  expect(message.text).not.toContain('Please send manually');
+});
+
+test('buildErrorBlocks still contains Send failed copy (regression)', () => {
+  const blocks = buildErrorBlocks('test error');
+  const text = blocks
+    .map((b: any) => (b as { text?: { text?: string } }).text?.text ?? '')
+    .join('');
+  expect(text).toContain('Send failed');
+  expect(text).toContain('Please send manually');
 });
 
 describe('parseClassifyResponse', () => {
