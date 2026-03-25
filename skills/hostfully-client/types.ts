@@ -161,8 +161,11 @@ export interface HostfullyCustomData {
   text: string;
 }
 
+import type { RetryConfig } from '../pipeline/retry.ts';
+
 export interface HostfullyClientConfig {
   apiKey: string;
   agencyUid: string;
   baseUrl: string;
+  retryConfig?: Partial<RetryConfig>;
 }

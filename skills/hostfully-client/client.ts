@@ -12,16 +12,19 @@ import type {
   HostfullyClientConfig,
   HostfullyCustomData,
 } from './types.ts';
+import { withRetry, type RetryConfig } from '../pipeline/retry.ts';
 
 export class HostfullyClient {
   private apiKey: string;
   private baseUrl: string;
   private agencyUid: string;
+  private retryConfig: Partial<RetryConfig>;
 
   constructor(config: HostfullyClientConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.agencyUid = config.agencyUid;
+    this.retryConfig = config.retryConfig ?? {};
   }
 
   private get headers(): Record<string, string> {
@@ -34,7 +37,44 @@ export class HostfullyClient {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
+    return withRetry(async () => {
+      const response = await fetch(url, {
+        method,
+        headers: this.headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
 
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Hostfully API rate limit exceeded (429) — too many requests, slow down or check quota');
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(
+            `Hostfully API authentication failed (${response.status}) — check that HOSTFULLY_API_KEY is valid and has not been rotated`
+          );
+        }
+
+        let errorMessage = `Hostfully API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorBody = await response.json() as HostfullyApiError;
+          if (errorBody.message) errorMessage += ` — ${errorBody.message}`;
+          if (errorBody.error) errorMessage += ` — ${errorBody.error}`;
+        } catch {
+          // non-JSON error body — keep base message
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return undefined as unknown as T;
+      }
+      return response.json() as Promise<T>;
+    }, this.retryConfig);
+  }
+
+  private async requestOnce<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
     const response = await fetch(url, {
       method,
       headers: this.headers,
@@ -137,7 +177,8 @@ export class HostfullyClient {
       threadUid,
       content: { subject: null, text },
     };
-    return this.request<HostfullySendMessageResponse>('POST', '/messages', body);
+    // No retry — POST idempotency risk: retrying could send duplicate messages to guests
+    return this.requestOnce<HostfullySendMessageResponse>('POST', '/messages', body);
   }
 
   async listWebhooks(agencyUid: string): Promise<HostfullyWebhookRegistrationResponse[]> {

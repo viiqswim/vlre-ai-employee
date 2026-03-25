@@ -521,3 +521,62 @@ describe('updateDoorCode', () => {
     await expect(client.updateDoorCode('prop-1', '5678')).rejects.toThrow('door_code');
   });
 });
+
+describe('retry behavior', () => {
+  const MSG_PAYLOAD = {
+    message: {
+      uid: 'msg-retry',
+      threadUid: 'thread-1',
+      leadUid: 'lead-1',
+      createdAt: '2024-01-01T00:00:00Z',
+      content: { subject: null, text: 'Hello!' },
+      senderType: 'GUEST',
+    },
+  };
+
+  test('getMessage() retries on 503 and succeeds on 3rd attempt', async () => {
+    const retryClient = new HostfullyClient({ ...TEST_CONFIG, retryConfig: { _sleep: async () => {} } });
+    fetchMock = mock(() => Promise.resolve(new Response(null, { status: 503, statusText: 'Service Unavailable' })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 503, statusText: 'Service Unavailable' })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 503, statusText: 'Service Unavailable' })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(mockResponse(MSG_PAYLOAD)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const message = await retryClient.getMessage('msg-retry');
+
+    expect(message.uid).toBe('msg-retry');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  test('getMessage() does NOT retry on 401 — throws immediately', async () => {
+    const retryClient = new HostfullyClient({ ...TEST_CONFIG, retryConfig: { _sleep: async () => {} } });
+    fetchMock = mock(() => Promise.resolve(new Response(null, { status: 401 })));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(retryClient.getMessage('msg-1')).rejects.toThrow(/authentication failed/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('getMessage() retries on 429 rate limit', async () => {
+    const retryClient = new HostfullyClient({ ...TEST_CONFIG, retryConfig: { _sleep: async () => {} } });
+    fetchMock = mock(() => Promise.resolve(new Response(null, { status: 429 })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 429 })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 429 })));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(mockResponse(MSG_PAYLOAD)));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const message = await retryClient.getMessage('msg-retry');
+
+    expect(message.uid).toBe('msg-retry');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  test('sendMessage() does NOT retry on 503 — throws after single attempt', async () => {
+    const retryClient = new HostfullyClient({ ...TEST_CONFIG, retryConfig: { _sleep: async () => {} } });
+    fetchMock = mock(() => Promise.resolve(new Response(null, { status: 503, statusText: 'Service Unavailable' })));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(retryClient.sendMessage('thread-1', 'Hello guest!')).rejects.toThrow(/503/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
