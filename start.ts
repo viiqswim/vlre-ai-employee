@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
-import { validateOpenRouterConfig } from './src/startup-checks.ts'
+import { validateOpenRouterConfig, validateOpenRouterApiKey } from './src/startup-checks.ts'
 
 // Set working directory to script's own directory (bash equivalent: cd "$SCRIPT_DIR")
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -76,6 +76,15 @@ if (hasTailscale) {
 }
 
 validateOpenRouterConfig()
+
+try {
+  console.log('Validating OpenRouter API key...')
+  await validateOpenRouterApiKey()
+  console.log('OpenRouter API key ✓')
+} catch (error) {
+  console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(1)
+}
 
 const { createHostfullyClient } = await import('./skills/hostfully-client/client.ts')
 const hostfullyClient = createHostfullyClient()
