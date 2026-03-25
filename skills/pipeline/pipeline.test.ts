@@ -141,6 +141,30 @@ test('skips empty message content', async () => {
   expect((context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls.length).toBe(0);
 });
 
+test('getMessage failure posts fetch-warning message to Slack', async () => {
+  const context = makeContext({
+    hostfullyClient: {
+      ...makeContext().hostfullyClient,
+      getMessage: mock(() =>
+        Promise.reject(new Error('Hostfully API error: 503 Service Unavailable')),
+      ),
+    } as unknown as HostfullyClient,
+  });
+  const payload = makePayload();
+
+  await processWebhookMessage(payload, context);
+
+  const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+  expect(postCalls.length).toBe(1);
+
+  const callArgs = postCalls[0]?.[0] as { channel: string; text: string };
+  expect(callArgs?.channel).toBe('C0TEST');
+  expect(callArgs?.text).toContain('⚠️');
+  expect(callArgs?.text).toContain('Could not process');
+  expect(callArgs?.text).not.toContain('Send failed');
+  expect(callArgs?.text).not.toContain('Please send manually');
+});
+
 test('full pipeline: posts approval message to Slack on success', async () => {
   global.fetch = mock(() =>
     Promise.resolve({
@@ -520,8 +544,9 @@ test('posts error to Slack when getMessage fails', async () => {
   const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
   expect(postCalls.length).toBe(1);
 
-  const args = postCalls[0]?.[0] as { blocks: unknown[] };
-  expect(Array.isArray(args?.blocks)).toBe(true);
+  const args = postCalls[0]?.[0] as { text: string };
+  expect(args?.text).toContain('⚠️');
+  expect(args?.text).toContain('Could not process');
 });
 
 test('posts authentication failed error to Slack when getMessage returns 401', async () => {
@@ -539,10 +564,9 @@ test('posts authentication failed error to Slack when getMessage returns 401', a
   const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
   expect(postCalls.length).toBe(1);
 
-  const args = postCalls[0]?.[0] as { blocks: unknown[]; text: string };
-  expect(Array.isArray(args?.blocks)).toBe(true);
-  const blockContent = JSON.stringify(args.blocks);
-  expect(blockContent).toMatch(/authentication failed/i);
+  const args = postCalls[0]?.[0] as { text: string };
+  expect(args?.text).toContain('⚠️');
+  expect(args?.text).toContain('authentication failed');
 });
 
 describe('withRetry', () => {

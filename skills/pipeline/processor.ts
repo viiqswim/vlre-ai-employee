@@ -371,7 +371,7 @@ export async function processWebhookMessage(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[PIPELINE] Failed to fetch message ${message_uid}: ${msg}`);
-    await postErrorToSlack(slackApp, slackChannelId, `Failed to fetch message: ${msg}`, message_uid);
+    await postFetchWarningToSlack(slackApp, slackChannelId, `Failed to fetch message: ${msg}`, message_uid);
     return;
   }
 
