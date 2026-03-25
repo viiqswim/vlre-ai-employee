@@ -74,7 +74,6 @@ export class WebhookDeduplicator {
   }
 
   markProcessed(messageUid: string): void {
-    if (this.processedIds.has(messageUid)) return;
     this.processedIds.add(messageUid);
     this.persist();
     console.log(`[DEDUP] Marked as processed: ${messageUid}`);
@@ -83,7 +82,9 @@ export class WebhookDeduplicator {
   unmarkProcessed(messageUid: string): void {
     if (!this.processedIds.has(messageUid)) return;
     this.processedIds.delete(messageUid);
-    this.persist();
+    if (existsSync(this.filePath)) {
+      this.persist();
+    }
     console.log(`[DEDUP] Unmarked: ${messageUid}`);
   }
 

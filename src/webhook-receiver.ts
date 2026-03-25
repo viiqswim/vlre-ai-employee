@@ -70,17 +70,25 @@ export function startWebhookReceiver(
           });
         }
 
-        // Mark processed before forwarding to prevent race conditions on concurrent delivery
-        dedup.markProcessed(payload.message_uid);
+        // Mark in-memory immediately — prevents race conditions on concurrent delivery
+        // File persistence is deferred to after successful pipeline completion
+        dedup.markInMemory(payload.message_uid);
 
         // Return 200 immediately — Hostfully expects a fast response, processing is async
         const response = new Response(JSON.stringify({ ok: true }), {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        // Fire-and-forget: don't await so Hostfully gets the 200 without delay
-        onMessage(payload).catch((err) =>
-          console.error('[WEBHOOK] Pipeline failed:', err)
+        // Deferred marking: persist to disk on success, remove from memory on failure
+        // This ensures pipeline failures don't permanently strand messages in dedup store
+        onMessage(payload).then(
+          () => {
+            dedup.markProcessed(payload.message_uid);
+          },
+          (err: unknown) => {
+            console.error('[WEBHOOK] Pipeline failed:', err instanceof Error ? err.message : String(err));
+            dedup.unmarkProcessed(payload.message_uid);
+          }
         );
 
         return response;
