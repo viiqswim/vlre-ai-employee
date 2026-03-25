@@ -58,6 +58,17 @@ export function formatChannel(channel: string): string {
 }
 
 /**
+ * Escape special Slack mrkdwn characters in user-facing text.
+ * Order matters: & must be escaped first to avoid double-escaping.
+ */
+export function escapeMrkdwn(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
  * Build the main approval message with guest info, draft response, and action buttons.
  * This is what the CS team sees when a new guest message arrives.
  */
@@ -161,7 +172,7 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
       elements: [
         {
           type: 'mrkdwn',
-          text: `*Guest:* ${params.guestName}  |  *Dates:* ${params.checkInDate} – ${params.checkOutDate} (${params.nightCount}n)  |  *Channel:* ${formatChannel(params.channel)}`,
+          text: `*Guest:* ${escapeMrkdwn(params.guestName)}  |  *Dates:* ${params.checkInDate} – ${params.checkOutDate} (${params.nightCount}n)  |  *Channel:* ${formatChannel(params.channel)}`,
         },
         {
           type: 'mrkdwn',
@@ -176,7 +187,7 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*📋 Conversation so far:*\n${params.conversationSummary}`,
+          text: `*📋 Conversation so far:*\n${escapeMrkdwn(params.conversationSummary)}`,
         },
       } as KnownBlock,
     ] : []),
@@ -184,7 +195,7 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*💬 Latest message:*\n>${params.guestMessage.replace(/\n/g, '\n>')}`,
+        text: `*💬 Latest message:*\n>${escapeMrkdwn(params.guestMessage).replace(/\n/g, '\n>')}`,
       },
     },
     ...mismatchBlocks,
@@ -192,7 +203,7 @@ export function buildApprovalBlocks(params: ApprovalMessageParams): KnownBlock[]
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*🤖 Suggested response:*\n>${params.draftResponse.replace(/\n/g, '\n>')}`,
+        text: `*🤖 Suggested response:*\n>${escapeMrkdwn(params.draftResponse).replace(/\n/g, '\n>')}`,
       },
     },
     ...lockStatusBlocks,

@@ -9,6 +9,7 @@ import {
   buildEditModal,
   formatChannel,
   formatConfidence,
+  escapeMrkdwn,
   type ApprovalMessageParams,
   type PostActionContext,
 } from './blocks';
@@ -387,4 +388,40 @@ test('buildEditModal private_metadata contains draftResponse', () => {
   expect(typeof modal.private_metadata).toBe('string');
   const parsed = JSON.parse(modal.private_metadata) as { draftResponse?: string };
   expect(parsed.draftResponse).toBe(draftText);
+});
+
+test('escapeMrkdwn escapes & < > in correct order', () => {
+  expect(escapeMrkdwn('a < b & c > d')).toBe('a &lt; b &amp; c &gt; d');
+});
+
+test('buildApprovalBlocks escapes < > & in guestMessage', () => {
+  const blocks = buildApprovalBlocks(makeParams({ guestMessage: 'Price < $100 & tax > $10' }));
+  const msgSection = blocks.find(b => b.type === 'section' && 'text' in b && b.text?.text?.includes('Latest message'));
+  expect(msgSection).toBeDefined();
+  if (msgSection?.type === 'section') {
+    expect(msgSection.text?.text).toContain('&lt;');
+    expect(msgSection.text?.text).toContain('&amp;');
+    expect(msgSection.text?.text).toContain('&gt;');
+    expect(msgSection.text?.text).not.toContain('Price < $100');
+  }
+});
+
+test('buildApprovalBlocks escapes < > & in draftResponse', () => {
+  const blocks = buildApprovalBlocks(makeParams({ draftResponse: 'Use <script> & alert()' }));
+  const draftSection = blocks.find(b => b.type === 'section' && 'text' in b && b.text?.text?.includes('Suggested response'));
+  expect(draftSection).toBeDefined();
+  if (draftSection?.type === 'section') {
+    expect(draftSection.text?.text).toContain('&lt;script&gt;');
+    expect(draftSection.text?.text).not.toContain('<script>');
+  }
+});
+
+test('buildApprovalBlocks escapes & in conversationSummary', () => {
+  const blocks = buildApprovalBlocks(makeParams({ conversationSummary: 'Guest asked about A & B' }));
+  const summarySection = blocks.find(b => b.type === 'section' && 'text' in b && b.text?.text?.includes('Conversation so far'));
+  expect(summarySection).toBeDefined();
+  if (summarySection?.type === 'section') {
+    expect(summarySection.text?.text).toContain('A &amp; B');
+    expect(summarySection.text?.text).not.toContain('A & B');
+  }
 });
