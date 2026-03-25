@@ -18,6 +18,14 @@ export function isRetryableError(error: unknown): boolean {
     if (msg.includes('ECONNREFUSED') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT')) {
       return true;
     }
+    // HTTP 5xx status errors (thrown as Error by HTTP clients)
+    if (/\b5\d{2}\b/.test(msg) && !msg.includes('authentication failed')) {
+      return true;
+    }
+    // HTTP 429 rate limit errors
+    if (/\b429\b/.test(msg) || msg.includes('rate limit')) {
+      return true;
+    }
   }
   return false;
 }
