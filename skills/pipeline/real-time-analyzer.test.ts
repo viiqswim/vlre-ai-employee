@@ -169,3 +169,58 @@ describe('analyzeEditInBackground', () => {
     expect(result.error).toBeUndefined();
   });
 });
+
+describe('callClaude', () => {
+  test('logs auth-specific message for 401 response', async () => {
+    const { callClaude } = await import('./real-time-analyzer.ts');
+    const errorSpy = mock((msg: string) => {});
+    const originalError = console.error;
+    console.error = errorSpy as unknown as typeof console.error;
+
+    const fetch401 = mock(
+      async () =>
+        new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          statusText: 'Unauthorized',
+        }),
+    );
+    global.fetch = fetch401 as unknown as typeof fetch;
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
+
+    const result = await callClaude('system prompt', 'user message');
+
+    expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
+    const callArgs = errorSpy.mock.calls[0]?.[0];
+    expect(callArgs).toContain('authentication failed');
+
+    console.error = originalError;
+  });
+
+  test('logs generic message for 500 response', async () => {
+    const { callClaude } = await import('./real-time-analyzer.ts');
+    const errorSpy = mock((msg: string) => {});
+    const originalError = console.error;
+    console.error = errorSpy as unknown as typeof console.error;
+
+    const fetch500 = mock(
+      async () =>
+        new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+          status: 500,
+          statusText: 'Internal Server Error',
+        }),
+    );
+    global.fetch = fetch500 as unknown as typeof fetch;
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
+
+    const result = await callClaude('system prompt', 'user message');
+
+    expect(result).toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
+    const callArgs = errorSpy.mock.calls[0]?.[0];
+    expect(callArgs).not.toContain('authentication failed');
+    expect(callArgs).toContain('500');
+
+    console.error = originalError;
+  });
+});

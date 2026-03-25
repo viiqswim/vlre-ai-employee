@@ -159,7 +159,11 @@ export async function callClaude(systemPrompt: string, userMessage: string): Pro
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
-      console.error(`[ANALYZER] OpenRouter API request failed: ${response.status} ${response.statusText}`);
+      if (response.status === 401 || response.status === 403) {
+        console.error(`[ANALYZER] OpenRouter authentication failed (${response.status}) — OPENROUTER_API_KEY may be invalid or rotated`);
+      } else {
+        console.error(`[ANALYZER] OpenRouter API request failed: ${response.status} ${response.statusText}`);
+      }
       return null;
     }
     const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
