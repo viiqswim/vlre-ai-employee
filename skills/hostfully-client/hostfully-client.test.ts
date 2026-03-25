@@ -243,6 +243,32 @@ describe('sendMessage', () => {
   });
 });
 
+describe('getCustomData', () => {
+  test('calls /v3/custom-data?propertyUid= endpoint (not v3.2)', async () => {
+    let capturedUrl = '';
+    const originalFetch = global.fetch;
+    global.fetch = mock(async (url: string | URL | Request, _init?: RequestInit) => {
+      capturedUrl = url.toString();
+      return mockResponse({ customData: [] });
+    }) as unknown as typeof fetch;
+
+    try {
+      const client = new HostfullyClient({
+        apiKey: 'test-key',
+        baseUrl: 'https://api.hostfully.com/api/v3.2',
+        agencyUid: 'test-agency',
+      });
+      await client.getCustomData('test-property-uid');
+      expect(capturedUrl).toContain('/v3/custom-data');
+      expect(capturedUrl).toContain('propertyUid=test-property-uid');
+      expect(capturedUrl).not.toContain('/v3.2/');
+      expect(capturedUrl).not.toContain('/properties/');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
 describe('listWebhooks', () => {
   test('returns webhooks array from response', async () => {
     const apiPayload = {
@@ -425,7 +451,8 @@ describe('getDoorCode', () => {
 
     expect(code).toBe('1234');
     const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toContain('/properties/prop-1/customData');
+    expect(url).toContain('/v3/custom-data');
+    expect(url).toContain('propertyUid=prop-1');
   });
 
   test('returns null when no door_code field exists', async () => {

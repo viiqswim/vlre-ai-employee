@@ -35,6 +35,10 @@ export class HostfullyClient {
     };
   }
 
+  private get v3BaseUrl(): string {
+    return this.baseUrl.replace('/v3.2', '/v3');
+  }
+
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     return withRetry(async () => {
@@ -69,6 +73,43 @@ export class HostfullyClient {
       if (response.status === 204 || response.headers.get('content-length') === '0') {
         return undefined as unknown as T;
       }
+      return response.json() as Promise<T>;
+    }, this.retryConfig);
+  }
+
+  private async requestV3<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const url = `${this.v3BaseUrl}${path}`;
+    return withRetry(async () => {
+      const response = await fetch(url, {
+        method,
+        headers: this.headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Hostfully API rate limit exceeded (429) — too many requests, slow down or check quota');
+        }
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(
+            `Hostfully API authentication failed (${response.status}) — check that HOSTFULLY_API_KEY is valid and has not been rotated`
+          );
+        }
+        let errorMessage = `Hostfully API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorBody = await response.json() as HostfullyApiError;
+          if (errorBody.message) errorMessage += ` — ${errorBody.message}`;
+          if (errorBody.error) errorMessage += ` — ${errorBody.error}`;
+        } catch {
+          // non-JSON error body — keep base message
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return undefined as unknown as T;
+      }
+
       return response.json() as Promise<T>;
     }, this.retryConfig);
   }
@@ -215,9 +256,9 @@ export class HostfullyClient {
   }
 
   async getCustomData(propertyUid: string): Promise<HostfullyCustomData[]> {
-    const response = await this.request<{ customData?: HostfullyCustomData[] }>(
+    const response = await this.requestV3<{ customData?: HostfullyCustomData[] }>(
       'GET',
-      `/properties/${propertyUid}/customData`
+      `/custom-data?propertyUid=${encodeURIComponent(propertyUid)}`
     );
     return response.customData ?? [];
   }
