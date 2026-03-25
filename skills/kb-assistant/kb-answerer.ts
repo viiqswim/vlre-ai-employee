@@ -36,7 +36,14 @@ export async function askKBAssistant(question: string, kbContext: string): Promi
         signal: controller.signal,
         body: JSON.stringify({ model, max_tokens: 800, messages: [{ role: 'system', content: KB_ASSISTANT_PROMPT }, { role: 'user', content: userMessage }] }),
       });
-      if (!response.ok) { console.error('[KB-ASSISTANT] OpenRouter API error: ' + response.status); return { found: false, answer: null, source: null }; }
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          console.error(`[KB-ASSISTANT] OpenRouter authentication failed (${response.status}) — OPENROUTER_API_KEY may be invalid or rotated`);
+        } else {
+          console.error('[KB-ASSISTANT] OpenRouter API error: ' + response.status);
+        }
+        return { found: false, answer: null, source: null };
+      }
       const data = await response.json() as { choices: Array<{ message: { content: string } }> };
       responseText = data.choices?.[0]?.message?.content ?? '';
     } finally {
@@ -104,13 +111,20 @@ export async function formatKBEntry(question: string, rawAnswer: string): Promis
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(`${openRouterBaseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${openRouterKey}`, 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({ model, max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
-      });
-      if (!response.ok) return fallback();
+       const response = await fetch(`${openRouterBaseUrl}/chat/completions`, {
+         method: 'POST',
+         headers: { 'Authorization': `Bearer ${openRouterKey}`, 'Content-Type': 'application/json' },
+         signal: controller.signal,
+         body: JSON.stringify({ model, max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
+       });
+       if (!response.ok) {
+         if (response.status === 401 || response.status === 403) {
+           console.error(`[KB-ASSISTANT] OpenRouter authentication failed (${response.status}) — OPENROUTER_API_KEY may be invalid or rotated`);
+         } else {
+           console.error('[KB-ASSISTANT] OpenRouter API error: ' + response.status);
+         }
+         return fallback();
+       }
       const data = await response.json() as { choices: Array<{ message: { content: string } }> };
       responseText = data.choices?.[0]?.message?.content?.trim() ?? '';
     } finally {

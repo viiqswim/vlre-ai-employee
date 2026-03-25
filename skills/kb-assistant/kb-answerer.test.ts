@@ -54,6 +54,56 @@ describe('detectPropertyInQuestion', () => {
   });
 });
 
+describe('askKBAssistant auth errors', () => {
+  const origFetch = globalThis.fetch;
+  const origEnv = process.env;
+  const origConsoleError = console.error;
+
+  beforeEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    process.env = origEnv;
+    console.error = origConsoleError;
+  });
+
+  test("logs auth-specific message for 401", async () => {
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
+    let errorMessage = '';
+    console.error = ((msg: string) => {
+      errorMessage = msg;
+    }) as any;
+
+    (globalThis.fetch as any) = async () => {
+      return new Response('Unauthorized', { status: 401 });
+    };
+
+    const result = await askKBAssistant('test', 'context');
+    expect(result.found).toBe(false);
+    expect(errorMessage).toContain('authentication failed');
+    expect(errorMessage).toContain('401');
+  });
+
+  test("logs generic message for 500", async () => {
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
+    let errorMessage = '';
+    console.error = ((msg: string) => {
+      errorMessage = msg;
+    }) as any;
+
+    (globalThis.fetch as any) = async () => {
+      return new Response('Server error', { status: 500 });
+    };
+
+    const result = await askKBAssistant('test', 'context');
+    expect(result.found).toBe(false);
+    expect(errorMessage).not.toContain('authentication failed');
+    expect(errorMessage).toContain('OpenRouter API error');
+  });
+});
+
 describe('askKBAssistant timeout', () => {
   const origFetch = globalThis.fetch;
   const origEnv = process.env;
@@ -126,6 +176,56 @@ describe('askKBAssistant timeout', () => {
     expect(result.found).toBe(false);
     expect(result.answer).toBeNull();
     expect(result.source).toBeNull();
+  });
+});
+
+describe('formatKBEntry auth errors', () => {
+  const origFetch = globalThis.fetch;
+  const origEnv = process.env;
+  const origConsoleError = console.error;
+
+  beforeEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    process.env = origEnv;
+    console.error = origConsoleError;
+  });
+
+  test("logs auth-specific message for 403", async () => {
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
+    let errorMessage = '';
+    console.error = ((msg: string) => {
+      errorMessage = msg;
+    }) as any;
+
+    (globalThis.fetch as any) = async () => {
+      return new Response('Forbidden', { status: 403 });
+    };
+
+    const result = await formatKBEntry('test question', 'test answer');
+    expect(result.entry).toBeTruthy();
+    expect(errorMessage).toContain('authentication failed');
+    expect(errorMessage).toContain('403');
+  });
+
+  test("logs generic message for 502", async () => {
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test-key';
+    let errorMessage = '';
+    console.error = ((msg: string) => {
+      errorMessage = msg;
+    }) as any;
+
+    (globalThis.fetch as any) = async () => {
+      return new Response('Bad gateway', { status: 502 });
+    };
+
+    const result = await formatKBEntry('test question', 'test answer');
+    expect(result.entry).toBeTruthy();
+    expect(errorMessage).not.toContain('authentication failed');
+    expect(errorMessage).toContain('OpenRouter API error');
   });
 });
 
