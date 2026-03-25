@@ -1,6 +1,6 @@
 import { test, expect, beforeEach, afterEach } from "bun:test";
 import { WebhookDeduplicator, createDeduplicator } from "./dedup";
-import { existsSync, unlinkSync, mkdirSync } from "fs";
+import { existsSync, unlinkSync, mkdirSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -14,13 +14,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  // Clean up test files
-  if (existsSync(testFilePath)) {
-    unlinkSync(testFilePath);
-  }
-  if (existsSync(testDir)) {
-    Bun.spawnSync(["rm", "-rf", testDir]);
-  }
+  const jsonPath = testFilePath.replace('.txt', '.json');
+  if (existsSync(jsonPath)) unlinkSync(jsonPath);
+  if (existsSync(testFilePath + '.bak')) unlinkSync(testFilePath + '.bak');
+  if (existsSync(testFilePath)) unlinkSync(testFilePath);
+  if (existsSync(testDir)) Bun.spawnSync(["rm", "-rf", testDir]);
 });
 
 test("isProcessed returns false for unknown UID", () => {
@@ -108,9 +106,9 @@ test("markProcessed does not duplicate entries in file", async () => {
   dedup.markProcessed(uid);
 
   const content = await Bun.file(testFilePath).text();
-  const lines = content.split("\n").filter((l) => l.trim());
-  expect(lines.length).toBe(1);
-  expect(lines[0]).toBe(uid);
+  const parsed = JSON.parse(content);
+  expect(parsed.items.length).toBe(1);
+  expect(parsed.items[0]).toBe(uid);
 });
 
 test("handles multiple UIDs in file correctly", async () => {
@@ -131,4 +129,71 @@ test("handles multiple UIDs in file correctly", async () => {
   for (const uid of uids) {
     expect(content).toContain(uid);
   }
+});
+
+test("markProcessed writes JSON format { items: string[] }", async () => {
+  const jsonPath = testFilePath.replace('.txt', '.json');
+  const dedup = new WebhookDeduplicator(jsonPath);
+  dedup.markProcessed("uid-json-1");
+  dedup.markProcessed("uid-json-2");
+
+  const content = await Bun.file(jsonPath).text();
+  const parsed = JSON.parse(content);
+  expect(parsed).toHaveProperty('items');
+  expect(Array.isArray(parsed.items)).toBe(true);
+  expect(parsed.items).toContain('uid-json-1');
+  expect(parsed.items).toContain('uid-json-2');
+});
+
+test("loading from existing JSON file restores state", () => {
+  const jsonPath = testFilePath.replace('.txt', '.json');
+  mkdirSync(testDir, { recursive: true });
+  writeFileSync(jsonPath, JSON.stringify({ items: ['uid-a', 'uid-b'] }), 'utf-8');
+
+  const dedup = new WebhookDeduplicator(jsonPath);
+  expect(dedup.isProcessed('uid-a')).toBe(true);
+  expect(dedup.isProcessed('uid-b')).toBe(true);
+  expect(dedup.getProcessedCount()).toBe(2);
+});
+
+test("auto-migrates existing .txt file to .json on construction", () => {
+  mkdirSync(testDir, { recursive: true });
+  writeFileSync(testFilePath, 'uid-migrate-1\nuid-migrate-2\nuid-migrate-3\n', 'utf-8');
+
+  const jsonPath = testFilePath.replace('.txt', '.json');
+  const dedup = new WebhookDeduplicator(jsonPath);
+
+  expect(dedup.getProcessedCount()).toBe(3);
+  expect(dedup.isProcessed('uid-migrate-1')).toBe(true);
+  expect(dedup.isProcessed('uid-migrate-2')).toBe(true);
+  expect(dedup.isProcessed('uid-migrate-3')).toBe(true);
+  expect(existsSync(jsonPath)).toBe(true);
+  expect(existsSync(testFilePath + '.bak')).toBe(true);
+});
+
+test("unmarkProcessed removes UID from Set and JSON file", async () => {
+  const jsonPath = testFilePath.replace('.txt', '.json');
+  const dedup = new WebhookDeduplicator(jsonPath);
+  dedup.markProcessed('uid-keep');
+  dedup.markProcessed('uid-remove');
+
+  expect(dedup.getProcessedCount()).toBe(2);
+  dedup.unmarkProcessed('uid-remove');
+  expect(dedup.getProcessedCount()).toBe(1);
+  expect(dedup.isProcessed('uid-remove')).toBe(false);
+  expect(dedup.isProcessed('uid-keep')).toBe(true);
+
+  const content = await Bun.file(jsonPath).text();
+  const parsed = JSON.parse(content);
+  expect(parsed.items).not.toContain('uid-remove');
+  expect(parsed.items).toContain('uid-keep');
+});
+
+test("markInMemory adds to Set without writing to file", () => {
+  const jsonPath = testFilePath.replace('.txt', '.json');
+  const dedup = new WebhookDeduplicator(jsonPath);
+  dedup.markInMemory('uid-memory-only');
+
+  expect(dedup.isProcessed('uid-memory-only')).toBe(true);
+  expect(existsSync(jsonPath)).toBe(false);
 });

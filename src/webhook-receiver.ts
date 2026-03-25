@@ -3,7 +3,7 @@ import { createDeduplicator } from '../skills/dedup/index.ts';
 
 const PORT = parseInt(process.env['WEBHOOK_PORT'] ?? '48901', 10);
 
-const dedup = createDeduplicator('data/processed-messages.txt');
+const dedup = createDeduplicator('data/processed-messages.json');
 
 export function startWebhookReceiver(
   onMessage: (payload: HostfullyWebhookPayload) => Promise<void>
