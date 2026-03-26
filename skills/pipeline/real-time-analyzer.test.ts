@@ -224,3 +224,92 @@ describe('callClaude', () => {
     console.error = originalError;
   });
 });
+
+describe('analyzeEditInBackground — proposed status and type', () => {
+  test('new rule has status: proposed (not confirmed)', async () => {
+    const original = '1. WiFi: GuestNet\n2. Code: 4829\n3. Park: driveway';
+    const edited =
+      'WiFi is GuestNet, password is abc123. Door code 4829. Parking is in the driveway.';
+
+    const result = await analyzeEditInBackground({
+      originalDraft: original,
+      editedText: edited,
+      propertyName: 'Test Property',
+    });
+
+    expect(result.proposed).toBe(true);
+    expect(result.rule?.status).toBe('proposed');
+
+    expect(mockAddRule).toHaveBeenCalledTimes(1);
+    const addedRule = mockAddRule.mock.calls[0]?.[0] as LearnedRule;
+    expect(addedRule.status).toBe('proposed');
+  });
+
+  test('new rule has no confirmedAt field', async () => {
+    const original = '1. WiFi: GuestNet\n2. Code: 4829\n3. Park: driveway';
+    const edited =
+      'WiFi is GuestNet, password is abc123. Door code 4829. Parking is in the driveway.';
+
+    const result = await analyzeEditInBackground({
+      originalDraft: original,
+      editedText: edited,
+      propertyName: 'Test Property',
+    });
+
+    expect(result.rule?.confirmedAt).toBeUndefined();
+
+    const addedRule = mockAddRule.mock.calls[0]?.[0] as LearnedRule;
+    expect(addedRule.confirmedAt).toBeUndefined();
+  });
+
+  test('type is set to rule when Claude returns type=rule', async () => {
+    const ruleFetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    type: 'rule',
+                    pattern: 'AI adds formal greeting',
+                    correction: 'Do not add formal greetings',
+                    scope: 'global',
+                    skip: false,
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    );
+    global.fetch = ruleFetch as unknown as typeof fetch;
+
+    const original = '1. WiFi: GuestNet\n2. Code: 4829\n3. Park: driveway';
+    const edited =
+      'WiFi is GuestNet, password is abc123. Door code 4829. Parking is in the driveway.';
+
+    const result = await analyzeEditInBackground({
+      originalDraft: original,
+      editedText: edited,
+      propertyName: 'Test Property',
+    });
+
+    expect(result.rule?.type).toBe('rule');
+
+    global.fetch = mockFetch as unknown as typeof fetch;
+  });
+
+  test('skips when original and edited text are same after normalizing whitespace/case', async () => {
+    const result = await analyzeEditInBackground({
+      originalDraft: 'The wifi password is ABC123',
+      editedText: 'the wifi password is abc123',
+      propertyName: 'Test Property',
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(result.ruleCreated).toBe(false);
+    expect(mockAddRule).not.toHaveBeenCalled();
+  });
+});

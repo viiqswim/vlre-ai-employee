@@ -223,3 +223,39 @@ describe('updateRule edge cases', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('getConfirmedRules — excludes non-confirmed rules', () => {
+  test('excludes proposed rules, includes only confirmed', async () => {
+    const proposedRule = makeRule({ id: 'rule-proposed', status: 'proposed' });
+    const confirmedRule = makeRule({
+      id: 'rule-confirmed',
+      status: 'confirmed',
+      pattern: 'confirmed pattern only',
+    });
+    const rejectedRule = makeRule({
+      id: 'rule-rejected',
+      status: 'rejected',
+      pattern: 'rejected pattern only',
+    });
+
+    await saveRules([proposedRule, confirmedRule, rejectedRule]);
+    invalidateCache();
+
+    const confirmed = getConfirmedRules();
+    expect(confirmed.length).toBe(1);
+    expect(confirmed[0]?.id).toBe('rule-confirmed');
+    expect(confirmed.find((r) => r.status === 'proposed')).toBeUndefined();
+    expect(confirmed.find((r) => r.status === 'rejected')).toBeUndefined();
+  });
+
+  test('returns empty array when all rules are proposed', async () => {
+    const rule1 = makeRule({ id: 'rule-1', status: 'proposed', pattern: 'pattern one' });
+    const rule2 = makeRule({ id: 'rule-2', status: 'proposed', pattern: 'pattern two' });
+
+    await saveRules([rule1, rule2]);
+    invalidateCache();
+
+    const confirmed = getConfirmedRules();
+    expect(confirmed.length).toBe(0);
+  });
+});
