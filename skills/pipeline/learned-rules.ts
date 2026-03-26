@@ -15,6 +15,9 @@ export interface LearnedRule {
   confirmedAt?: string;
   scope?: 'global' | string;
   conditions?: string;
+  type?: 'rule' | 'knowledge';
+  kbFilePath?: string;
+  kbAppendedText?: string;
 }
 
 export interface LearnedRulesFile {
