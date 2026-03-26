@@ -13,7 +13,8 @@ import {
   type PostActionContext,
 } from '../slack-blocks/blocks.ts';
 import { analyzeEditInBackground } from '../pipeline/real-time-analyzer.js';
-import { buildRuleNotificationBlocks } from '../slack-blocks/notification-blocks.js';
+import { registerLearningHandlers } from './learning-handlers.js';
+import { buildLearningConfirmationBlocks } from '../slack-blocks/learning-blocks.js';
 
 interface ButtonMetadata {
   messageUid: string;
@@ -305,18 +306,20 @@ export function registerEditHandler(
           originalDraft,
           editedText,
           propertyName: modalMetadata.propertyName ?? '',
+          channelId: modalMetadata.channelId,
+          messageTs: modalMetadata.messageTs,
           onRuleCreated: async (rule) => {
             try {
-              const channelId = process.env['SLACK_CHANNEL_ID'] ?? '';
-              if (channelId) {
+              if (modalMetadata.channelId && modalMetadata.messageTs) {
                 await client.chat.postMessage({
-                  channel: channelId,
-                  blocks: buildRuleNotificationBlocks(rule),
-                  text: `New rule learned: ${rule.correction}`,
+                  channel: modalMetadata.channelId,
+                  thread_ts: modalMetadata.messageTs,
+                  blocks: buildLearningConfirmationBlocks(rule),
+                  text: '🧠 I noticed something from your edit — please review',
                 });
               }
             } catch (notifyErr) {
-              console.error('[SLACK] Failed to post rule notification:', notifyErr instanceof Error ? notifyErr.message : String(notifyErr));
+              console.error('[SLACK] Failed to post learning proposal thread reply:', notifyErr instanceof Error ? notifyErr.message : String(notifyErr));
             }
           },
         }).catch((err: unknown) => {
@@ -489,6 +492,7 @@ export function registerAllHandlers(
   registerRejectHandler(app, threadTracker);
   registerEditHandler(app, hostfullyClient, threadTracker);
   registerRuleHandlers(app);
+  registerLearningHandlers(app);
   registerFixLockCodeHandler(app, sifelyClient);
-  console.log('[SLACK] All action handlers registered (approve, reject, edit, rules, fix-lock-code)');
+  console.log('[SLACK] All action handlers registered (approve, reject, edit, rules, learning, fix-lock-code)');
 }
