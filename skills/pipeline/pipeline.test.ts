@@ -205,6 +205,17 @@ test('full pipeline: posts approval message to Slack on success', async () => {
 
   const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
   expect(trackCalls.length).toBe(1);
+  
+  // Verify metadata is passed as 5th argument
+  const trackCall = trackCalls[0];
+  expect(trackCall?.[0]).toBe('thread-001'); // thread_uid
+  expect(trackCall?.[1]).toBe('1234567890.000001'); // slackTs
+  expect(trackCall?.[2]).toBe('C0TEST'); // channelId
+  expect(trackCall?.[3]).toBe('msg-001'); // messageUid
+  expect(trackCall?.[4]).toEqual({
+    guestName: 'Jane Smith',
+    propertyName: 'Lakewood Retreat',
+  });
 });
 
 test('KB search is called with property name', async () => {
@@ -1258,6 +1269,68 @@ describe('conversation history', () => {
     await processWebhookMessage(payload, context);
 
     expect(getMessagesMock.mock.calls.length).toBe(0);
+
+    void 0;
+    void 0;
+  });
+
+  test('passes undefined for guestName when lead has no name', async () => {
+    global.fetch = mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    classification: 'NEEDS_APPROVAL',
+                    confidence: 0.7,
+                    reasoning: 'test',
+                    draftResponse: 'Thanks for your message!',
+                    summary: 'Guest inquiry',
+                    category: 'other',
+                    conversationSummary: null,
+                    urgency: false,
+                  }),
+                },
+              },
+            ],
+          }),
+      } as Response),
+    ) as unknown as typeof global.fetch;
+
+    void 0;
+    void 0;
+
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getLead: mock(() =>
+          Promise.resolve({
+            uid: 'lead-001',
+            propertyUid: 'prop-001',
+            guestFirstName: null,
+            guestLastName: null,
+            checkInDate: '2026-04-01',
+            checkOutDate: '2026-04-05',
+            numberOfNights: 4,
+            channel: 'AIRBNB',
+          }),
+        ),
+      } as unknown as HostfullyClient,
+    });
+
+    await processWebhookMessage(makePayload(), context);
+
+    const trackCalls = (context.threadTracker.track as ReturnType<typeof mock>).mock.calls;
+    expect(trackCalls.length).toBe(1);
+
+    const trackCall = trackCalls[0];
+    expect(trackCall?.[4]).toEqual({
+      guestName: 'Guest',
+      propertyName: 'Lakewood Retreat',
+    });
 
     void 0;
     void 0;

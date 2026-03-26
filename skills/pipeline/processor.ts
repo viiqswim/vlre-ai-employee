@@ -571,7 +571,10 @@ export async function processWebhookMessage(
     });
 
     if (postResult.ts) {
-      threadTracker.track(thread_uid, postResult.ts, slackChannelId, message_uid);
+      threadTracker.track(thread_uid, postResult.ts, slackChannelId, message_uid, {
+        guestName: guestName ?? undefined,
+        propertyName: propertyName ?? undefined,
+      });
     }
 
     console.log(`[PIPELINE] ✅ Posted ${classifyResult.urgency ? '🚨 URGENT ' : ''}approval message to Slack for ${guestName} at ${propertyName}`);
