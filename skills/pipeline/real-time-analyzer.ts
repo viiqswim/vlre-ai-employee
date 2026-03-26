@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import type { LearnedRule } from './learned-rules.js';
 import {
   addRule,
@@ -9,6 +10,7 @@ import { DIFF_ANALYZER_PROMPT } from './diff-analyzer-prompt.js';
 
 export interface AnalysisResult {
   ruleCreated: boolean;
+  proposed?: boolean;       // true when a proposal was created (pending confirmation)
   rule?: LearnedRule;
   skipped: boolean;
   error?: string;
@@ -23,18 +25,15 @@ interface DiffAnalysisResponse {
   skipReason?: string | null;
 }
 
-/**
- * Analyzes an edit diff using Claude to detect generalizable patterns.
- * Auto-confirms rules immediately. Never throws — all errors are caught and logged.
- * Designed to be called fire-and-forget from the Slack edit handler.
- */
 export async function analyzeEditInBackground(params: {
   originalDraft: string;
   editedText: string;
   propertyName: string;
+  channelId?: string;
+  messageTs?: string;
   onRuleCreated?: (rule: LearnedRule) => Promise<void>;
 }): Promise<AnalysisResult> {
-  const { originalDraft, editedText, propertyName, onRuleCreated } = params;
+  const { originalDraft, editedText, propertyName, channelId: _channelId, messageTs: _messageTs, onRuleCreated } = params;
 
   try {
     // Skip trivial edits: normalize whitespace/case and compare; also skip if <10% length change
@@ -85,6 +84,11 @@ export async function analyzeEditInBackground(params: {
 
     const scope = analysis.scope === propertyName ? propertyName : 'global';
 
+    const learnType: 'rule' | 'knowledge' = analysis.type ?? 'rule';
+    const kbFilePath = learnType === 'knowledge'
+      ? resolveKbFilePath(propertyName, scope)
+      : undefined;
+
     const newRule: LearnedRule = {
       id: `rule-${Date.now()}-realtime`,
       pattern: analysis.pattern,
@@ -96,22 +100,23 @@ export async function analyzeEditInBackground(params: {
         },
       ],
       frequency: 1,
-      status: 'confirmed',
+      status: 'proposed',
       createdAt: new Date().toISOString(),
-      confirmedAt: new Date().toISOString(),
       scope,
+      type: learnType,
+      kbFilePath,
     };
 
     try {
       await addRule(newRule);
       invalidateCache();
-      console.log(`[ANALYZER] Auto-confirmed new rule: "${newRule.pattern}" (scope: ${scope})`);
+      console.log(`[ANALYZER] Proposed new rule: "${newRule.pattern}" (scope: ${scope})`);
 
       if (onRuleCreated) {
         await onRuleCreated(newRule);
       }
 
-      return { ruleCreated: true, rule: newRule, skipped: false };
+      return { ruleCreated: false, proposed: true, rule: newRule, skipped: false };
     } catch (err) {
       if (err instanceof Error && err.message === 'DUPLICATE_PATTERN') {
         // Find existing rule and increment frequency
@@ -131,6 +136,22 @@ export async function analyzeEditInBackground(params: {
     console.error(`[ANALYZER] Analysis failed: ${errorMsg}`);
     return { ruleCreated: false, skipped: false, error: errorMsg };
   }
+}
+
+function resolveKbFilePath(propertyName: string, scope: string): string {
+  if (scope === 'global') return 'knowledge-base/common.md';
+  try {
+    const mapContent = readFileSync('knowledge-base/property-map.json', 'utf-8');
+    const map = JSON.parse(mapContent) as { properties: Array<{ names: string[]; code: string; kbFile: string }> };
+    const lower = propertyName.toLowerCase();
+    const match = map.properties.find((p) =>
+      p.names.some((n) => n.toLowerCase() === lower || lower.includes(n.toLowerCase()) || n.toLowerCase().includes(lower))
+      || p.code.toLowerCase() === lower
+    );
+    if (match) return `knowledge-base/${match.kbFile}`;
+  } catch {
+  }
+  return 'knowledge-base/common.md';
 }
 
 export async function callClaude(systemPrompt: string, userMessage: string): Promise<string | null> {
