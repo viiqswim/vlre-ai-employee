@@ -15,6 +15,7 @@ export interface AnalysisResult {
 }
 
 interface DiffAnalysisResponse {
+  type?: 'rule' | 'knowledge';
   pattern: string;
   correction: string;
   scope: string;
@@ -66,6 +67,7 @@ export async function analyzeEditInBackground(params: {
     let analysis: DiffAnalysisResponse;
     try {
       analysis = JSON.parse(analysisJson) as DiffAnalysisResponse;
+      analysis.type = analysis.type ?? 'rule';
     } catch {
       console.error('[ANALYZER] Failed to parse Claude response as JSON:', analysisJson.substring(0, 200));
       return { ruleCreated: false, skipped: false, error: 'Failed to parse analysis JSON' };

@@ -7,6 +7,7 @@ You will receive:
 
 Analyze the difference. Extract a generalizable rule IF the edit reveals a consistent behavior correction. Return ONLY valid JSON in this exact format:
 {
+  "type": "rule" or "knowledge",
   "pattern": "short description of what the AI is doing wrong (≤15 words)",
   "correction": "short instruction of what to do instead (≤15 words)",
   "scope": "global" or the exact property name if the rule only applies to that property,
@@ -16,12 +17,17 @@ Analyze the difference. Extract a generalizable rule IF the edit reveals a consi
 
 If the edit should NOT become a rule, return:
 {
+  "type": "rule",
   "pattern": "",
   "correction": "",
   "scope": "global",
   "skip": true,
   "skipReason": "one-line reason (typo fix, guest-specific, too minor, etc.)"
 }
+
+TYPE field:
+- "rule": The edit reveals a behavioral pattern (tone, formatting, length, greetings, sign-offs, markdown, AI-isms, structure)
+- "knowledge": The edit adds or corrects factual information (WiFi passwords, amenity details, house rules, check-in/out times, specific property facts)
 
 SKIP if the edit is:
 - A typo or spelling correction only
@@ -38,13 +44,18 @@ SCOPE = "global" if:
 - The rule applies to all properties (tone, structure, word choice, formatting)
 - The correction is about AI-isms, markdown, length, greetings, sign-offs, etc.
 
-Examples of GLOBAL rules:
+Examples of GLOBAL rules (type: "rule"):
 - "AI uses numbered lists" → "Write in flowing prose, not numbered lists"
 - "AI adds sign-off phrase" → "End the message naturally without any sign-off"
 - "AI adds greeting (Hi/Hey)" → "Answer directly without starting with Hi/Hey"
 
-Examples of PROPERTY-SPECIFIC rules:
+Examples of PROPERTY-SPECIFIC rules (type: "rule"):
 - Correction mentions specific amenity only at one property
 - Correction adds info that only applies to that address
+
+Examples of KNOWLEDGE edits (type: "knowledge"):
+- Original: "WiFi password is in the welcome packet" → Edited: "WiFi password is MyNetwork2024"
+- Original: "Check-in is flexible" → Edited: "Check-in is 3 PM, but we can arrange early check-in for $25"
+- Original: "The property has a hot tub" → Edited: "The property has a heated hot tub available year-round"
 
 Return ONLY the JSON object. No explanation, no markdown, no code block.`;
