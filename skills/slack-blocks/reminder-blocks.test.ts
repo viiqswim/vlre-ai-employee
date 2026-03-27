@@ -17,7 +17,7 @@ test('formatElapsedTime: minutes >= 60', () => {
   expect(formatElapsedTime(121)).toBe('2h 1min');
 });
 
-test('buildReminderBlocks: single thread', () => {
+test('buildReminderBlocks: single thread compact format', () => {
   const threads: ReminderThread[] = [
     {
       threadUid: 'thread-1',
@@ -30,43 +30,21 @@ test('buildReminderBlocks: single thread', () => {
 
   const blocks = buildReminderBlocks(threads);
 
-  // Should have: header, timestamp context, section, footer context = 4 blocks
-  expect(blocks.length).toBe(4);
+  expect(blocks.length).toBeLessThanOrEqual(5);
 
-  // First block is header
+  const allText = JSON.stringify(blocks);
+
+  expect(allText).toContain('John Doe');
+  expect(allText).toContain('7213 Nutria Run');
+  expect(allText).toContain('45 min');
+  expect(allText).toContain('https://slack.com/archives/C123/p1234567890');
+  expect(allText).toContain('View');
+
   const headerBlock = blocks[0] as KnownBlock;
   expect(headerBlock.type).toBe('header');
-  if (headerBlock.type === 'header' && headerBlock.text?.type === 'plain_text') {
-    expect(headerBlock.text.text).toContain('1 Unresponded Message(s)');
-  }
-
-  // Second block is timestamp context
-  const timestampBlock = blocks[1] as KnownBlock;
-  expect(timestampBlock.type).toBe('context');
-
-  // Third block is section with guest info
-  const sectionBlock = blocks[2] as KnownBlock;
-  expect(sectionBlock.type).toBe('section');
-  if (sectionBlock.type === 'section' && sectionBlock.text?.type === 'mrkdwn') {
-    expect(sectionBlock.text.text).toContain('John Doe');
-    expect(sectionBlock.text.text).toContain('7213 Nutria Run');
-    expect(sectionBlock.text.text).toContain('45 min');
-  }
-
-  // Check button accessory
-  if (sectionBlock.type === 'section' && sectionBlock.accessory?.type === 'button') {
-    expect(sectionBlock.accessory.url).toBe('https://slack.com/archives/C123/p1234567890');
-    if (sectionBlock.accessory.text?.type === 'plain_text') {
-      expect(sectionBlock.accessory.text.text).toBe('View Message');
-    }
-  }
-
-  // Fourth block is footer context
-  const footerBlock = blocks[3] as KnownBlock;
-  expect(footerBlock.type).toBe('context');
 });
 
-test('buildReminderBlocks: three threads with dividers', () => {
+test('buildReminderBlocks: three threads all info present', () => {
   const threads: ReminderThread[] = [
     {
       threadUid: 'thread-1',
@@ -93,66 +71,87 @@ test('buildReminderBlocks: three threads with dividers', () => {
 
   const blocks = buildReminderBlocks(threads);
 
-  // Should have: header, timestamp context, section, divider, section, divider, section, footer context = 8 blocks
-  expect(blocks.length).toBe(8);
+  expect(blocks.length).toBeLessThanOrEqual(50);
 
-  // Header contains "3"
-  const headerBlock = blocks[0] as KnownBlock;
-  if (headerBlock.type === 'header' && headerBlock.text?.type === 'plain_text') {
-    expect(headerBlock.text.text).toContain('3 Unresponded Message(s)');
-  }
+  const allText = JSON.stringify(blocks);
 
-  // Check dividers are at positions 3 and 5 (between sections)
-  expect(blocks[3]?.type).toBe('divider');
-  expect(blocks[5]?.type).toBe('divider');
-
-  // Check all three sections have permalinks
-  const section1 = blocks[2] as KnownBlock;
-  const section2 = blocks[4] as KnownBlock;
-  const section3 = blocks[6] as KnownBlock;
-
-  if (section1.type === 'section' && section1.accessory?.type === 'button') {
-    expect(section1.accessory.url).toBe('https://slack.com/archives/C123/p1111111111');
-  }
-  if (section2.type === 'section' && section2.accessory?.type === 'button') {
-    expect(section2.accessory.url).toBe('https://slack.com/archives/C123/p2222222222');
-  }
-  if (section3.type === 'section' && section3.accessory?.type === 'button') {
-    expect(section3.accessory.url).toBe('https://slack.com/archives/C123/p3333333333');
-  }
+  expect(allText).toContain('Alice');
+  expect(allText).toContain('Bob');
+  expect(allText).toContain('Charlie');
+  expect(allText).toContain('Property A');
+  expect(allText).toContain('Property B');
+  expect(allText).toContain('Property C');
+  expect(allText).toContain('https://slack.com/archives/C123/p1111111111');
+  expect(allText).toContain('https://slack.com/archives/C123/p2222222222');
+  expect(allText).toContain('https://slack.com/archives/C123/p3333333333');
+  expect(allText).toContain('30 min');
+  expect(allText).toContain('1h 0min');
+  expect(allText).toContain('2h 0min');
 });
 
-test('buildReminderBlocks: empty array', () => {
+test('buildReminderBlocks: 25 threads stays under 50 blocks', () => {
+  const threads: ReminderThread[] = Array.from({ length: 25 }, (_, i) => ({
+    threadUid: `t${i}`,
+    guestName: `Guest ${i}`,
+    propertyName: `Property ${i}`,
+    elapsedMinutes: 30 + i,
+    permalink: `https://slack.com/p${i}`,
+  }));
+
+  const blocks = buildReminderBlocks(threads);
+
+  expect(blocks.length).toBeLessThanOrEqual(50);
+});
+
+test('buildReminderBlocks: 100 threads stays under 50 blocks and all guests present', () => {
+  const threads: ReminderThread[] = Array.from({ length: 100 }, (_, i) => ({
+    threadUid: `t${i}`,
+    guestName: `Guest ${i}`,
+    propertyName: `Property ${i}`,
+    elapsedMinutes: 30 + i,
+    permalink: `https://slack.com/p${i}`,
+  }));
+
+  const blocks = buildReminderBlocks(threads);
+
+  expect(blocks.length).toBeLessThanOrEqual(50);
+
+  const allText = JSON.stringify(blocks);
+
+  expect(allText).toContain('Guest 0');
+  expect(allText).toContain('Guest 99');
+});
+
+test('buildReminderBlocks: empty array returns valid blocks', () => {
   const blocks = buildReminderBlocks([]);
 
-  // Should still have: header, timestamp context, footer context = 3 blocks
-  expect(blocks.length).toBe(3);
+  expect(blocks.length).toBeLessThanOrEqual(5);
+  expect(blocks.length).toBeGreaterThan(0);
 
   const headerBlock = blocks[0] as KnownBlock;
-  if (headerBlock.type === 'header' && headerBlock.text?.type === 'plain_text') {
-    expect(headerBlock.text.text).toContain('0 Unresponded Message(s)');
-  }
+  expect(headerBlock.type).toBe('header');
 });
 
-test('buildReminderBlocks: escapes special characters in guest/property names', () => {
+test('buildReminderBlocks: escapes special characters in names', () => {
   const threads: ReminderThread[] = [
     {
       threadUid: 'thread-1',
       guestName: 'John & Jane <Doe>',
       propertyName: 'Property & Co. <Main>',
       elapsedMinutes: 45,
-      permalink: 'https://slack.com/archives/C123/p1234567890',
+      permalink: 'https://slack.com/p1',
     },
   ];
 
   const blocks = buildReminderBlocks(threads);
-  const sectionBlock = blocks[2] as KnownBlock;
 
-  if (sectionBlock.type === 'section' && sectionBlock.text?.type === 'mrkdwn') {
-    const text = sectionBlock.text.text;
-    // Should contain escaped versions
-    expect(text).toContain('&amp;');
-    expect(text).toContain('&lt;');
-    expect(text).toContain('&gt;');
-  }
+  const allText = JSON.stringify(blocks);
+
+  expect(allText).toContain('&amp;');
+  expect(allText).toContain('&lt;');
+  expect(allText).toContain('&gt;');
+
+  // Verify no raw unescaped & followed by a letter
+  const rawAmpMatch = allText.match(/&(?!amp;|lt;|gt;)[a-zA-Z]/);
+  expect(rawAmpMatch).toBeNull();
 });

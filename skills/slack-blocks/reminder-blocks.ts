@@ -67,31 +67,39 @@ export function buildReminderBlocks(threads: ReminderThread[]): KnownBlock[] {
     ],
   });
 
-  // Thread entries with dividers
-  for (let i = 0; i < threads.length; i++) {
-    const thread = threads[i]!;
+  // Build compact mrkdwn bullet list — one line per thread
+  // Each line: • *GuestName* · PropertyName · ElapsedTime · <permalink|View>
+  const lines = threads.map(thread =>
+    `• *${escapeMrkdwn(thread.guestName)}* · ${escapeMrkdwn(thread.propertyName)} · ${formatElapsedTime(thread.elapsedMinutes)} · <${thread.permalink}|View>`
+  );
 
+  // Chunk lines into section blocks (Slack mrkdwn text field max: 3000 chars)
+  // This ensures we never exceed the character limit regardless of thread count
+  const MRKDWN_CHAR_LIMIT = 3000;
+  let currentChunk: string[] = [];
+  let currentLength = 0;
+
+  for (const line of lines) {
+    const lineWithNewline = line + '\n';
+    if (currentChunk.length > 0 && currentLength + lineWithNewline.length > MRKDWN_CHAR_LIMIT) {
+      // Flush current chunk as a section block
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: currentChunk.join('\n') },
+      });
+      currentChunk = [];
+      currentLength = 0;
+    }
+    currentChunk.push(line);
+    currentLength += lineWithNewline.length;
+  }
+
+  // Flush remaining lines
+  if (currentChunk.length > 0) {
     blocks.push({
       type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Guest:* ${escapeMrkdwn(thread.guestName)}\n*Property:* ${escapeMrkdwn(thread.propertyName)}\n*Pending:* ${formatElapsedTime(thread.elapsedMinutes)}`,
-      },
-      accessory: {
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: 'View Message',
-          emoji: true,
-        },
-        url: thread.permalink,
-      },
+      text: { type: 'mrkdwn', text: currentChunk.join('\n') },
     });
-
-    // Add divider between entries (not after the last one)
-    if (i < threads.length - 1) {
-      blocks.push({ type: 'divider' });
-    }
   }
 
   // Footer context block
