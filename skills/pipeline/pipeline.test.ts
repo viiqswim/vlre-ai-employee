@@ -560,12 +560,40 @@ test('posts error to Slack when getMessage fails', async () => {
   expect(args?.text).toContain('Could not process');
 });
 
-test('posts authentication failed error to Slack when getMessage returns 401', async () => {
+test('silently skips host-message 401 without Slack warning or console output', async () => {
+  const originalConsoleError = console.error;
+  const consoleErrorMock = mock(() => {});
+  console.error = consoleErrorMock;
+  try {
+    const context = makeContext({
+      hostfullyClient: {
+        ...makeContext().hostfullyClient,
+        getMessage: mock(() =>
+          Promise.reject(new Error('Hostfully API authentication failed (401) — check that HOSTFULLY_API_KEY is valid and has not been rotated'))
+        ),
+      } as unknown as HostfullyClient,
+    });
+
+    await processWebhookMessage(makePayload(), context);
+
+    const postCalls = (context.slackApp.client.chat.postMessage as ReturnType<typeof mock>).mock.calls;
+    expect(postCalls.length).toBe(0);
+
+    const pipelineErrors = (consoleErrorMock.mock.calls as Array<unknown[]>).filter(
+      (args) => typeof args[0] === 'string' && (args[0] as string).includes('[PIPELINE]')
+    );
+    expect(pipelineErrors.length).toBe(0);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
+test('posts Slack warning for non-401 getMessage errors (e.g. 503)', async () => {
   const context = makeContext({
     hostfullyClient: {
       ...makeContext().hostfullyClient,
       getMessage: mock(() =>
-        Promise.reject(new Error('Hostfully API authentication failed (401) — check that HOSTFULLY_API_KEY is valid and has not been rotated'))
+        Promise.reject(new Error('Hostfully API error: 503 Service Unavailable'))
       ),
     } as unknown as HostfullyClient,
   });
@@ -577,7 +605,7 @@ test('posts authentication failed error to Slack when getMessage returns 401', a
 
   const args = postCalls[0]?.[0] as { text: string };
   expect(args?.text).toContain('⚠️');
-  expect(args?.text).toContain('authentication failed');
+  expect(args?.text).toContain('Could not process');
 });
 
 describe('withRetry', () => {

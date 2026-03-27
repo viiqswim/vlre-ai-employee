@@ -369,6 +369,9 @@ export async function processWebhookMessage(
     senderType = message.senderType;
     console.log(`[PIPELINE] Fetched message, sender: ${senderType}`);
   } catch (error) {
+    if (error instanceof Error && error.message.includes('authentication failed (401)')) {
+      return;
+    }
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[PIPELINE] Failed to fetch message ${message_uid}: ${msg}`);
     await postFetchWarningToSlack(slackApp, slackChannelId, `Failed to fetch message: ${msg}`, message_uid);
