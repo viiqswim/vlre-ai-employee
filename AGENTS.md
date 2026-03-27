@@ -6,6 +6,16 @@ A digital employee for VL Real Estate built on the OpenClaw agent runtime. Papi 
 
 This project uses OpenCode for AI-assisted development. `AGENTS.md` is the primary instruction file read by OpenCode and compatible tools (Codex, Cursor, Copilot, Windsurf).
 
+## CRITICAL: Never Destroy Uncommitted Work
+
+**NEVER run `git stash`, `git checkout <file>`, `git reset --hard`, or any command that discards unstaged or uncommitted changes** without explicit user instruction.
+
+Unstaged changes may represent intentional in-progress work, features deployed but not yet committed, or functionality the user depends on in production. Silently reverting them causes data loss that is difficult to recover.
+
+If a file's changes appear to be out of scope for the current task, **commit them separately or leave them untouched** — do not discard them.
+
+---
+
 ## Commands
 
 ```bash
